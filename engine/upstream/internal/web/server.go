@@ -324,14 +324,14 @@ func renderIndex(c *gin.Context, songs []model.Song, playlists []model.Playlist,
 
 	if nativeJSON {
 		c.JSON(200, gin.H{
-			"songs":      songs,
-			"playlists":  playlists,
-			"keyword":    q,
-			"page":       page,
-			"pageSize":   pageSize,
-			"total":      totalCount,
-			"error":      errMsg,
-			"searchType": searchType,
+			"songs":           songs,
+			"playlists":       playlists,
+			"keyword":         q,
+			"page":            page,
+			"pageSize":        pageSize,
+			"total":           totalCount,
+			"error":           errMsg,
+			"searchType":      searchType,
 			"categorySources": playlistCategorySources,
 		})
 		return
@@ -393,6 +393,8 @@ type StartOptions struct {
 	DisableAuth       bool
 	ListenHost        string
 	BasePath          string
+	InstanceID        string
+	OnListen          func(net.Addr) error
 }
 
 func Start(port string, shouldOpenBrowser bool, basePath string) {
@@ -485,10 +487,14 @@ func StartWithOptions(port string, opts StartOptions) {
 		c.JSON(200, entries)
 	})
 	api.GET("/healthz", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
+		data := gin.H{
 			"app":    "go-music-dl",
 			"status": "ok",
-		})
+		}
+		if opts.InstanceID != "" {
+			data["instance"] = opts.InstanceID
+		}
+		c.JSON(http.StatusOK, data)
 	})
 
 	// Static assets embedded at build time.
@@ -552,12 +558,24 @@ func StartWithOptions(port string, opts StartOptions) {
 		fmt.Fprintf(os.Stderr, "Failed to start web server on %s: %v\n", listenAddr, err)
 		return
 	}
+	defer listener.Close()
+	if opts.OnListen != nil {
+		if err := opts.OnListen(listener.Addr()); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to publish server endpoint: %v\n", err)
+			return
+		}
+	}
+	_, actualPort, err := net.SplitHostPort(listener.Addr().String())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to read listener address: %v\n", err)
+		return
+	}
 
 	urlHost := opts.ListenHost
 	if urlHost == "" || urlHost == "0.0.0.0" || urlHost == "::" {
 		urlHost = "localhost"
 	}
-	urlStr := "http://" + urlHost + ":" + port + RoutePrefix
+	urlStr := "http://" + net.JoinHostPort(urlHost, actualPort) + RoutePrefix
 	fmt.Printf("Web started at %s\n", urlStr)
 	if opts.ShouldOpenBrowser {
 		go func() { time.Sleep(500 * time.Millisecond); core.OpenBrowser(urlStr) }()

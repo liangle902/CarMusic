@@ -14,7 +14,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
@@ -51,7 +50,7 @@ internal fun NativeQueue(service: PlaybackService) {
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 12.dp))
         if (queue.isEmpty()) Text("播放队列为空", Modifier.padding(vertical = 24.dp))
         LazyColumn(
-            Modifier.fillMaxWidth().heightIn(max = 540.dp).testTag("playback-queue"),
+            Modifier.fillMaxWidth().heightIn(max = 540.dp),
             state = state,
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {

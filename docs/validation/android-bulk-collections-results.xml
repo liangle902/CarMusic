@@ -1,9 +1,0 @@
-<?xml version='1.0' encoding='UTF-8' ?>
-<testsuite name="com.carmusic.app.BulkCollectionTest" tests="1" failures="0" errors="0" skipped="0" time="8.937" timestamp="2026-10-02T10:50:32" hostname="localhost">
-  <properties>
-    <property name="device" value="Redmi K20 Pro - 14" />
-    <property name="flavor" value="" />
-    <property name="project" value=":app" />
-  </properties>
-  <testcase name="bulkAddAndRemovePreserveFavoritesAndPlaybackQueue" classname="com.carmusic.app.BulkCollectionTest" time="6.675" />
-</testsuite>

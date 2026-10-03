@@ -3,10 +3,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"github.com/guohuiyuan/go-music-dl/internal/web"
 	"net"
 	"os"
-	"strconv"
 	"time"
 )
 
@@ -20,10 +21,27 @@ func main() {
 		}
 		return conn, nil
 	}}
-	port := os.Getenv("MUSIC_DL_PORT")
-	number, err := strconv.Atoi(port)
-	if err != nil || number < 1024 || number > 65535 {
-		port = "37777"
+	endpointFile := os.Getenv("MUSIC_DL_ENDPOINT_FILE")
+	instance := os.Getenv("MUSIC_DL_INSTANCE")
+	if endpointFile == "" || instance == "" {
+		panic("Android host endpoint configuration is missing")
 	}
-	web.StartWithOptions(port, web.StartOptions{DisableAuth: true, ListenHost: "127.0.0.1", BasePath: "/music"})
+	web.StartWithOptions("0", web.StartOptions{
+		DisableAuth: true, ListenHost: "127.0.0.1", BasePath: "/music", InstanceID: instance,
+		OnListen: func(address net.Addr) error {
+			bound, ok := address.(*net.TCPAddr)
+			if !ok || !bound.IP.IsLoopback() || bound.Port == 0 {
+				return errors.New("invalid local listener address")
+			}
+			data, err := json.Marshal(map[string]interface{}{"port": bound.Port, "pid": os.Getpid(), "instance": instance})
+			if err != nil {
+				return err
+			}
+			temporary := endpointFile + ".tmp"
+			if err := os.WriteFile(temporary, data, 0600); err != nil {
+				return err
+			}
+			return os.Rename(temporary, endpointFile)
+		},
+	})
 }

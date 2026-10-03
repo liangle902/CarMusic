@@ -145,6 +145,7 @@ class PlaybackService : MediaSessionService() {
         val upstreamFactory = DefaultDataSource.Factory(this, httpDataSourceFactory)
         val cacheDataSourceFactory = CacheDataSource.Factory()
             .setCache(simpleCache!!)
+            .setCacheKeyFactory { spec -> spec.key ?: ApiClient.playbackCacheKey(spec.uri) }
             .setUpstreamDataSourceFactory(upstreamFactory)
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
 
@@ -306,7 +307,7 @@ class PlaybackService : MediaSessionService() {
 
     fun playAlternate(song: SongItem, alternative: SongItem) {
         if(playlist.value.none {it.key==song.key}) playlist.value+=song
-        switchedTracks.add(song.key)
+        failedTracks.clear();switchedTracks.clear()
         loadSong(song,if(currentSong.value?.key==song.key) currentPosition.value else 0L,alternative)
     }
     private fun loadSong(song: SongItem, resume: Long = 0L, alternative: SongItem? = null) {
@@ -339,7 +340,7 @@ class PlaybackService : MediaSessionService() {
             val direct = resolved.streamUrl.takeIf { it.isNotBlank() && (resolved.source == "local" || it.startsWith("content:") || it.startsWith("file:")) }
                 ?: resolved.id.takeIf { resolved.source == "local" && (it.startsWith("content:") || it.startsWith("file:")) }
                 ?: if(alternative==null) ApiClient.offlineUri(song) else null
-            val cachedUrl=ApiClient.streamUrl(resolved).takeIf {url -> simpleCache?.let {cache -> val length=ContentMetadata.getContentLength(cache.getContentMetadata(url));length>0 && cache.isCached(url,0,length)} == true}
+            val cachedUrl=ApiClient.streamUrl(resolved).takeIf {url -> simpleCache?.let {cache -> val key=ApiClient.playbackCacheKey(Uri.parse(url));val length=ContentMetadata.getContentLength(cache.getContentMetadata(key));length>0 && cache.isCached(key,0,length)} == true}
             val info = try { if (direct == null && cachedUrl == null) ApiClient.inspectStream(resolved) else null }
                 catch (e: CancellationException) { throw e }
                 catch (e: Exception) { handleFailure(e.message ?: "音源解析失败"); return@launch }
@@ -370,7 +371,7 @@ class PlaybackService : MediaSessionService() {
             switchedTracks.add(song.key)
             resolveJob?.cancel()
             resolveJob=serviceScope.launch {
-                try {val alternative=ApiClient.switchSource(song.copy(source=resolvedSong.value?.source?:song.source));ensureActive();loadSong(song,currentPosition.value,alternative)}
+                try {val alternative=ApiClient.switchSource(resolvedSong.value?:song);ensureActive();loadSong(song,currentPosition.value,alternative)}
                 catch(e:CancellationException){throw e} catch(_:Exception){advanceAfterFailure(message)}
             }
         } else advanceAfterFailure(message)
@@ -422,7 +423,7 @@ class PlaybackService : MediaSessionService() {
         if (player.currentMediaItem == null) {
             val song = currentSong.value ?: playlist.value.firstOrNull()
             if (song != null) {
-                failedTracks.clear(); loadSong(song, currentPosition.value)
+                failedTracks.clear(); switchedTracks.clear(); loadSong(song, currentPosition.value)
             }
             return
         }

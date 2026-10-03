@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.carmusic.app.data.PlaybackQueueTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-03T01:10:00" hostname="KZDY" time="0.031">
-  <properties/>
-  <testcase name="selectingNewTrackKeepsOldQueueAndDoesNotDuplicateReselection" classname="com.carmusic.app.data.PlaybackQueueTest" time="0.031"/>
-  <testcase name="selectingExistingTrackMovesItToFrontAndPreservesRemainingOrder" classname="com.carmusic.app.data.PlaybackQueueTest" time="0.0"/>
-  <testcase name="latestSelectedMetadataReplacesOldEntryWithoutChangingOtherSources" classname="com.carmusic.app.data.PlaybackQueueTest" time="0.0"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>

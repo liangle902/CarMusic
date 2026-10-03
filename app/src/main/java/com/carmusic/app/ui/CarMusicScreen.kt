@@ -27,7 +27,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.platform.testTag
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,9 +84,7 @@ fun CarMusicScreen(service: PlaybackService) {
                         "视频制作" -> VideoEditor(current,service)
                         "本地歌单" -> NativeCollections(service) { songs,remove,batchRemove,header,actions -> SongList(songs,service,remove=remove,batchRemove=batchRemove,header=header,actions=actions) }
                         "最近听过" -> {val recent by AppStore.recent.collectAsState();var clear by remember {mutableStateOf(false)};Column {TextButton(onClick={clear=true},enabled=recent.isNotEmpty()){Text("清空播放历史")};SongList(recent,service,"播放过的音乐会留在这里")};if(clear) AlertDialog(onDismissRequest={clear=false},title={Text("清空播放历史？")},text={Text("不会修改播放队列、收藏或歌单。")},confirmButton={TextButton(onClick={AppStore.clearRecent();clear=false}){Text("清空")}},dismissButton={TextButton(onClick={clear=false}){Text("取消")}})}
-                        "播放队列" -> NativeQueue(service)
                         "下载管理" -> NativeDownloadManager(service) {SongList(it,service,"还没有下载的音乐")}
-                        "空白与异常状态" -> NativeStatePage(service) {page=it}
                     }
                 }
                 if (page !in listOf("正在播放","首页") && current != null) Surface(onClick = { page = "正在播放" }, tonalElevation = 3.dp, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
@@ -101,7 +98,7 @@ fun CarMusicScreen(service: PlaybackService) {
         if (queueOpen) ModalBottomSheet(onDismissRequest = { queueOpen = false }, sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)) { NativeQueue(service) }
         if (splash) Surface(Modifier.fillMaxSize().clickable { splash = false }, color = Color(0xFF0C2029)) {
             Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                StarLogo(Modifier.size(120.dp),animated=true); Spacer(Modifier.height(30.dp)); Text("星河音乐", fontSize = 36.sp, color = Color.White); Spacer(Modifier.height(28.dp)); FlowingSlogan(Modifier.fillMaxWidth(.9f).height(70.dp)); Text("为每一段旅程，留一首好歌。", color = Color(0xFFADBEC6), modifier = Modifier.padding(top = 16.dp))
+                StarLogo(Modifier.size(120.dp),animated=true); Spacer(Modifier.height(30.dp)); Text("星河音乐", fontSize = 36.sp, color = Color.White); Spacer(Modifier.height(28.dp)); FlowingSlogan(Modifier.fillMaxWidth(.9f).height(70.dp)); Text("发现、收藏、随时聆听。", color = Color(0xFFADBEC6), modifier = Modifier.padding(top = 16.dp))
             }
         }
     }
@@ -148,12 +145,12 @@ private fun NativePlayer(service: PlaybackService, openQueue: () -> Unit) {
         val vinyl by AppStore.vinyl.collectAsState()
         Row(Modifier.weight(1f).fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(14.dp)) {
         AlbumArtwork(song?.let {ApiClient.coverUrl(it.source,it.cover)},vinyl,playing,artworkSize)
-        LazyColumn(state = state, modifier = Modifier.weight(1f).fillMaxHeight().testTag("player-lyrics"), contentPadding = PaddingValues(vertical = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        LazyColumn(state = state, modifier = Modifier.weight(1f).fillMaxHeight(), contentPadding = PaddingValues(vertical = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             if (lyrics.isEmpty()) item {Text(if(lyricLoading) "正在加载歌词…" else lyricError?:"未找到匹配歌词",modifier=Modifier.padding(24.dp));if(!lyricLoading&&song!=null) TextButton(onClick={lyricRetry++}){Text("重试歌词")}}
             itemsIndexed(lyrics) { index,line -> TimedLyricText(line,position,index==active) {browsingLyrics=false;service.seekTo(line.timeMs)} }
         }
         }
-        Row(Modifier.fillMaxWidth().padding(top=18.dp),verticalAlignment=Alignment.CenterVertically) {Column(Modifier.weight(1f)){SongTitle(song?.name ?: "还没有正在播放的歌曲", modifier=Modifier.testTag("player-song-title"), fontSize = 24.sp);Text(song?.let {"${it.artist} · ${it.album}"} ?: "去歌单或搜索中选择音乐",color=MaterialTheme.colorScheme.onSurfaceVariant,fontSize=12.sp,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis,modifier=Modifier.padding(top=8.dp,bottom=12.dp))};TextButton(onClick=service::toggleFavorite,enabled=song!=null){Text(if(favorite) "♥" else "♡",fontSize=25.sp,color=if(favorite) Color(0xFFE85063) else MaterialTheme.colorScheme.onSurfaceVariant)}}
+        Row(Modifier.fillMaxWidth().padding(top=18.dp),verticalAlignment=Alignment.CenterVertically) {Column(Modifier.weight(1f)){SongTitle(song?.name ?: "还没有正在播放的歌曲", modifier=Modifier, fontSize = 24.sp);Text(song?.let {"${it.artist} · ${it.album}"} ?: "去歌单或搜索中选择音乐",color=MaterialTheme.colorScheme.onSurfaceVariant,fontSize=12.sp,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis,modifier=Modifier.padding(top=8.dp,bottom=12.dp))};TextButton(onClick=service::toggleFavorite,enabled=song!=null){Text(if(favorite) "♥" else "♡",fontSize=25.sp,color=if(favorite) Color(0xFFE85063) else MaterialTheme.colorScheme.onSurfaceVariant)}}
         song?.let { SongSourceStatus(it) }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error, maxLines = 2) }
         Slider(value = position.toFloat().coerceIn(0f,duration.toFloat().coerceAtLeast(1f)), onValueChange = { service.seekTo(it.toLong()) }, valueRange = 0f..duration.toFloat().coerceAtLeast(1f), enabled = song != null)
@@ -189,10 +186,10 @@ private fun SongList(songs: List<SongItem>, service: PlaybackService, empty: Str
     var batchJob by remember {mutableStateOf<Job?>(null)}
     val checks by AppStore.playbackChecks.collectAsState()
     val selectedSongs=songs.filter {it.key in selectedKeys}
-    LazyColumn(Modifier.fillMaxSize().testTag("song-list")) {
+    LazyColumn(Modifier.fillMaxSize()) {
         header?.let {item(key="playlist-header") {Column(Modifier.fillMaxWidth()) {it()}}}
         if(songs.isNotEmpty()) item {
-            FlowRow(Modifier.fillMaxWidth().testTag("playlist-actions"),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+            FlowRow(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
                 if(!batch) actions?.invoke()
                 TextButton(onClick={batch=!batch;if(!batch) selectedKeys=emptySet()}){Text(if(batch) "完成选择 · ${selectedSongs.size} 首" else "多选")}
             }
@@ -294,8 +291,8 @@ private fun NativeSearch(service: PlaybackService) {
 
 @Composable
 private fun NativeSettings(service:PlaybackService,replay: () -> Unit, library: () -> Unit, video: () -> Unit) {
-    var section by rememberSaveable {mutableStateOf("车机与显示")}
-    val sections=listOf("车机与显示","平台账号","常规","下载与存储","WebDAV 同步","高级选项","关于")
+    var section by rememberSaveable {mutableStateOf("播放与显示")}
+    val sections=listOf("播放与显示","平台账号","常规","下载与存储","WebDAV 同步","高级选项","关于")
     val groups=mapOf("常规" to setOf("disableFloatingLyrics","webPageSize","autoSwitchInvalidSources","autoCheckUpdate","updateRepoUrl"),"下载与存储" to setOf("embedDownload","downloadToLocal","downloadDir","downloadFilenameTemplate","downloadTipDuration","downloadConcurrency","autoCacheOnPlay"),"WebDAV 同步" to setOf("webdavEnabled","webdavUrl","webdavUsername","webdavPassword","webdavDir"),"高级选项" to setOf("cliPageSize","githubProxyEnabled","githubProxyUrl","vgChangeCover","vgChangeAudio","vgChangeLyric","vgExportVideo"))
     val theme by AppStore.theme.collectAsState(); val autoplay by AppStore.autoplay.collectAsState(); val vinyl by AppStore.vinyl.collectAsState()
     var config by remember {mutableStateOf<JsonObject?>(null)};var error by remember {mutableStateOf<String?>(null)};var about by remember {mutableStateOf(false)}
@@ -308,7 +305,7 @@ private fun NativeSettings(service:PlaybackService,replay: () -> Unit, library: 
     Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
         if(!wide) Row(Modifier.horizontalScroll(rememberScrollState())) {sections.forEach {name->FilterChip(section==name,{section=name},label={Text(name)},modifier=Modifier.padding(end=8.dp))}}
         Text(section,fontSize=22.sp)
-        if(section=="车机与显示") {
+        if(section=="播放与显示") {
         Row(Modifier.horizontalScroll(rememberScrollState())) {listOf("system" to "跟随系统","day" to "日间","night" to "夜间").forEach {(id,name)->FilterChip(theme==id,{AppStore.setTheme(id)},label={Text(name)},modifier=Modifier.padding(end=6.dp))}}
         SettingSwitch("启动后自动播放",autoplay,AppStore::setAutoplay)
         val notificationControls by AppStore.notificationControls.collectAsState()
@@ -335,11 +332,11 @@ private fun NativeSettings(service:PlaybackService,replay: () -> Unit, library: 
             }
             Button(onClick={scope.launch {try {ApiClient.saveSettings(settings);error="已保存"} catch(e:CancellationException){throw e} catch(e:Exception){error=e.message}}}) {Text("保存上游配置")}
         }
-        if(section=="关于") {Text("为每一段旅程，留一首好歌。");Text("显示方式 · 竖屏自适应");Text("功能来源 · GoMusicDll");TextButton(onClick={about=true}){Text("关于星河音乐")}}
+        if(section=="关于") {Text("让好音乐，随心而听。");Text("显示方式 · 竖屏自适应");Text("功能来源 · GoMusicDll");TextButton(onClick={about=true}){Text("关于星河音乐")}}
     }
     }
     }
-    if(about) AlertDialog(onDismissRequest={about=false},title={Text("星河音乐 · ${com.carmusic.app.BuildConfig.VERSION_NAME}")},text={Column(Modifier.heightIn(max=440.dp).verticalScroll(rememberScrollState())) {Text("为每一段旅程，留一首好歌。");Text("功能来源：GoMusicDll");Text("Go Music DL 是一个音乐搜索与下载工具，支持 Web 界面、TUI 终端和桌面应用。除单曲搜索与下载外，还支持歌单搜索与解析、分类浏览、我的歌单、专辑搜索与解析，以及批量处理。",Modifier.padding(vertical=12.dp));val context=androidx.compose.ui.platform.LocalContext.current;TextButton(onClick={context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse("https://github.com/guohuiyuan/go-music-dl")))}){Text("GoMusicDll · GitHub")};Text("星河音乐项目");TextButton(onClick={context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse("https://github.com/liangle902/CarMusic")))}){Text("星河音乐 · GitHub")};Text("引擎许可证：GNU AGPL v3",Modifier.padding(top=12.dp));TextButton(onClick={context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse("https://github.com/guohuiyuan/go-music-dl/blob/main/LICENSE")))}){Text("查看上游许可证")}}},confirmButton={TextButton(onClick={about=false}){Text("关闭")}})
+    if(about) AlertDialog(onDismissRequest={about=false},title={Text("星河音乐 · ${com.carmusic.app.BuildConfig.VERSION_NAME}")},text={Column(Modifier.heightIn(max=440.dp).verticalScroll(rememberScrollState())) {Text("让好音乐，随心而听。");Text("功能来源：GoMusicDll");Text("Go Music DL 是一个音乐搜索与下载工具，支持 Web 界面、TUI 终端和桌面应用。除单曲搜索与下载外，还支持歌单搜索与解析、分类浏览、我的歌单、专辑搜索与解析，以及批量处理。",Modifier.padding(vertical=12.dp));val context=androidx.compose.ui.platform.LocalContext.current;TextButton(onClick={context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse("https://github.com/guohuiyuan/go-music-dl")))}){Text("GoMusicDll · GitHub")};Text("星河音乐项目");TextButton(onClick={context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse("https://github.com/liangle902/CarMusic")))}){Text("星河音乐 · GitHub")};Text("引擎许可证：GNU AGPL v3",Modifier.padding(top=12.dp));TextButton(onClick={context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse("https://github.com/guohuiyuan/go-music-dl/blob/main/LICENSE")))}){Text("查看上游许可证")}}},confirmButton={TextButton(onClick={about=false}){Text("关闭")}})
 }
 @Composable
 private fun SettingSwitch(title:String,checked:Boolean,onChange:(Boolean)->Unit) {Row(Modifier.fillMaxWidth().padding(vertical=6.dp),verticalAlignment=Alignment.CenterVertically){Text(title,Modifier.weight(1f));Switch(checked,onChange)}}

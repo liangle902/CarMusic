@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.carmusic.app.engine.QrLoginPollingTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-02T11:32:38" hostname="KZDY" time="0.099">
-  <properties/>
-  <testcase name="temporaryErrorAndConfirmedWithoutCookieContinueUntilSuccess" classname="com.carmusic.app.engine.QrLoginPollingTest" time="0.088"/>
-  <testcase name="smsRequiredDoesNotPreventCompletionAndRateLimitBacksOff" classname="com.carmusic.app.engine.QrLoginPollingTest" time="0.004"/>
-  <testcase name="sessionExpirationDoesNotLeaveScannedMessageForever" classname="com.carmusic.app.engine.QrLoginPollingTest" time="0.005"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>

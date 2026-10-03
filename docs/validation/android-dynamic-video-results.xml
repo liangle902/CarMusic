@@ -1,9 +1,0 @@
-<?xml version='1.0' encoding='UTF-8' ?>
-<testsuite name="com.carmusic.app.VideoVisualTest" tests="1" failures="0" errors="0" skipped="0" time="26.904" timestamp="2026-10-02T11:35:47" hostname="localhost">
-  <properties>
-    <property name="device" value="Redmi K20 Pro - 14" />
-    <property name="flavor" value="" />
-    <property name="project" value=":app" />
-  </properties>
-  <testcase name="visualLoopsAndCoverAndBackgroundAreEncodedWithSelectedAudio" classname="com.carmusic.app.VideoVisualTest" time="25.489" />
-</testsuite>

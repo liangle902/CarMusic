@@ -10,6 +10,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.unit.dp
 
+const val MUSIC_SLOGAN = "让好音乐，随心而听。"
+
 @Composable
 fun StarLogo(modifier: Modifier = Modifier, animated: Boolean = false) {
     if (!animated) {
@@ -40,7 +42,7 @@ fun FlowingSlogan(modifier: Modifier = Modifier) {
     Canvas(modifier) {
         drawContext.canvas.nativeCanvas.apply {
             val paint=android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {textSize=size.width/11f;typeface=android.graphics.Typeface.create("serif",android.graphics.Typeface.BOLD);color=android.graphics.Color.rgb(226,199,145);strokeWidth=1.5f;style=android.graphics.Paint.Style.STROKE}
-            val path=android.graphics.Path();val text="一路星河，一路好歌。";paint.getTextPath(text,0,text.length,0f,size.height*.7f,path)
+            val path=android.graphics.Path();val text=MUSIC_SLOGAN;val left=(size.width-paint.measureText(text))/2f;paint.getTextPath(text,0,text.length,left,size.height*.7f,path)
             val measure=android.graphics.PathMeasure(path,false);val segment=android.graphics.Path()
             do {measure.getSegment(0f,measure.length*progress.value,segment,true)} while(measure.nextContour())
             drawPath(segment,paint)

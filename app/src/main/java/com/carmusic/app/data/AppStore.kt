@@ -15,7 +15,10 @@ object AppStore {
     val playbackChecks=MutableStateFlow<Map<String,String>>(emptyMap())
     val resolvedSources=MutableStateFlow<Map<String,SongItem>>(emptyMap())
     fun markPlayback(song:SongItem,status:String){playbackChecks.value=playbackChecks.value+(song.key to status)}
-    fun saveResolved(original:SongItem,resolved:SongItem){if(original.key!=resolved.key){prefs.edit().putString("resolved_${original.key}",gson.toJson(resolved)).apply();resolvedSources.value=resolvedSources.value+(original.key to resolved)}}
+    fun saveResolved(original:SongItem,resolved:SongItem){
+        if(original.key!=resolved.key){prefs.edit().putString("resolved_${original.key}",gson.toJson(resolved)).apply();resolvedSources.value=resolvedSources.value+(original.key to resolved)}
+        else {prefs.edit().remove("resolved_${original.key}").apply();resolvedSources.value=resolvedSources.value-original.key}
+    }
     fun restoredResolved(song:SongItem):SongItem?=resolvedSources.value[song.key]?:runCatching {prefs.getString("resolved_${song.key}",null)?.let {gson.fromJson(it,SongItem::class.java)}?.takeIf {it.id.isNotBlank()&&it.source.isNotBlank()}}.getOrNull()
     private val prefs by lazy { com.carmusic.app.CarMusicApplication.instance.getSharedPreferences("carmusic", Context.MODE_PRIVATE) }
     val favorites by lazy { MutableStateFlow(readSongs("favorites")) }

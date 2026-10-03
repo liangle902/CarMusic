@@ -22,7 +22,7 @@ fun NativeHome(service:PlaybackService,navigate:(String)->Unit) {
     val position by service.currentPosition.collectAsState();val favorites by AppStore.favorites.collectAsState()
     val recent by AppStore.recent.collectAsState();val colors=MaterialTheme.colorScheme
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(20.dp)) {
-        Column {Text("让好音乐，陪你一路。",fontSize=25.sp);Text("从熟悉的旋律开始今天的旅程",color=colors.onSurfaceVariant,fontSize=12.sp,modifier=Modifier.padding(top=8.dp))}
+        Column {Text(MUSIC_SLOGAN,fontSize=25.sp);Text("发现喜欢的旋律，收藏每一刻心情",color=colors.onSurfaceVariant,fontSize=12.sp,modifier=Modifier.padding(top=8.dp))}
         Surface(color=colors.surface,shape=RoundedCornerShape(22.dp)) {
             BoxWithConstraints(Modifier.fillMaxWidth().padding(16.dp)) {
                 val artSize=(maxWidth*.38f).coerceIn(76.dp,260.dp)
@@ -33,7 +33,7 @@ fun NativeHome(service:PlaybackService,navigate:(String)->Unit) {
                     }
                     Column(Modifier.weight(1f)) {
                         Text(if(playing) "正在播放" else "上次听到这里",color=colors.primary,fontSize=11.sp)
-                        SongTitle(song?.name?:"开启一段音乐旅程",fontSize=22.sp,modifier=Modifier.padding(top=10.dp))
+                        SongTitle(song?.name?:"从喜欢的音乐开始",fontSize=22.sp,modifier=Modifier.padding(top=10.dp))
                         Text(song?.let {"${it.artist} · ${it.album}"}?:"选择一首喜欢的歌",color=colors.onSurfaceVariant,fontSize=12.sp,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis,modifier=Modifier.padding(vertical=8.dp))
                         Button(onClick={if(song==null) navigate("歌单列表") else {if(!playing) service.togglePlayPause();navigate("正在播放")}},shape=RoundedCornerShape(12.dp),contentPadding=PaddingValues(horizontal=12.dp,vertical=8.dp)) {Text(if(song==null) "选择音乐" else if(playing) "进入播放" else "继续播放",fontSize=12.sp)}
                         if(song!=null) Text("${homeTime(position)} / ${homeTime(song!!.duration*1000)}",fontSize=10.sp,color=colors.onSurfaceVariant,modifier=Modifier.padding(top=8.dp))
@@ -42,7 +42,7 @@ fun NativeHome(service:PlaybackService,navigate:(String)->Unit) {
             }
         }
         Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-            listOf("歌单列表" to "我的歌单与各平台精选","我的收藏" to "${favorites.size} 首喜欢的歌，随时出发").forEach {(name,description)->
+            listOf("歌单列表" to "我的歌单与各平台精选","我的收藏" to "${favorites.size} 首喜欢的歌，随时聆听").forEach {(name,description)->
                 Surface(onClick={navigate(name)},color=colors.surface,shape=RoundedCornerShape(18.dp),modifier=Modifier.weight(1f)) {
                     Column(Modifier.padding(16.dp).heightIn(min=124.dp)) {Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){MusicIcon(name);MusicIcon("箭头",Modifier.size(18.dp),colors.onSurfaceVariant)};Spacer(Modifier.height(22.dp));Text(name,fontSize=20.sp);Text(description,fontSize=11.sp,color=colors.onSurfaceVariant,modifier=Modifier.padding(top=8.dp))}
                 }

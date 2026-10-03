@@ -13,4 +13,4 @@
 | Coil | Coil 官方 Maven 发布 | 封面加载；Apache 2.0。 |
 | Reorderable 2.2.0 | https://github.com/Calvin-LL/Reorderable/tree/v2.2.0 | `sh.calvin.reorderable:reorderable`；队列拖动跟手、实时让位和边缘滚动；Apache 2.0。与当前 Compose 1.6.6 配套使用。 |
 
-目前 APK 为本地开发验证构建，不代表已完成面向公众的分发材料。源码和二进制来源应在发布时保持一致。
+正式发布附件与对应版本的源码共同交付。保留上游许可证和组件来源。

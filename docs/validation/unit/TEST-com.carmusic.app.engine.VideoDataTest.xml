@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.carmusic.app.engine.VideoDataTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-03T01:10:00" hostname="KZDY" time="0.004">
-  <properties/>
-  <testcase name="spectrumDistinguishesSilenceAndTwoRealFrequencies" classname="com.carmusic.app.engine.VideoDataTest" time="0.002"/>
-  <testcase name="videoLyricsRoundTripWordsTranslationsAndRomanization" classname="com.carmusic.app.engine.VideoDataTest" time="0.002"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>

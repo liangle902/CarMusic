@@ -1,111 +1,74 @@
 # 星河音乐 · CarMusic
 
-**为每一段旅程，留一首好歌。**
+**让好音乐，随心而听。**
 
-项目仓库：[liangle902/CarMusic](https://github.com/liangle902/CarMusic)（私有，需授权访问）。
+适用于 Android 手机、平板及兼容设备的原生音乐播放器，兼容 Android 车机生态。汇集多平台歌曲与歌单，支持歌词、收藏、下载、本地音乐及自动换源。
 
-面向 Android 竖屏车机的原生音乐播放器，也适配竖屏手机。界面使用 Kotlin、Jetpack Compose，播放使用 Media3 / ExoPlayer；搜索、平台歌单、账号关联、下载与自动换源复用 [Go Music DL / GoMusicDll](https://github.com/guohuiyuan/go-music-dl)。
+Kotlin / Jetpack Compose 构建界面，Media3 / ExoPlayer 负责播放，搜索、平台歌单、账号关联、下载与自动换源复用 [GoMusicDll](https://github.com/guohuiyuan/go-music-dl)。
 
-当前为开发验收版本。功能覆盖与实际验证结果以 [原安卓功能对比](docs/UPSTREAM_ANDROID_FEATURE_AUDIT.md) 为准，不能将接口接通或二维码生成视为平台账号登录成功。
+[下载 v1.0.0](https://github.com/liangle902/CarMusic/releases/tag/v1.0.0) · [项目仓库](https://github.com/liangle902/CarMusic)（私有仓库，需要授权访问）。Android 8.0 及以上，ARM64。
 
-## 真机截图
+v1.0.0 提供竖屏界面，v1.5.0 将支持手机横屏与横屏车机的自适应布局；v2.0.0 将在车机实测导航语音避让、媒体按键与播放状态同步后发布。
 
-2026-10-03 在 Redmi K20 Pro / Android 14 上直接截取。手机截图展示竖屏适配，实车显示效果仍需车机验证。
+## 界面
 
 <table>
   <tr><th>首页</th><th>正在播放</th><th>播放队列</th></tr>
   <tr>
     <td><img src="docs/screenshots/home.png" width="230" alt="星河音乐首页" /></td>
-    <td><img src="docs/screenshots/playing.png" width="230" alt="歌曲封面、歌词和图标播放控制" /></td>
-    <td><img src="docs/screenshots/queue.png" width="230" alt="当前播放队列和拖动手柄" /></td>
+    <td><img src="docs/screenshots/playing.png" width="230" alt="封面、歌词与播放控制" /></td>
+    <td><img src="docs/screenshots/queue.png" width="230" alt="播放队列与拖动手柄" /></td>
   </tr>
   <tr><th>平台歌单</th><th>系统设置</th><th>我的收藏</th></tr>
   <tr>
-    <td><img src="docs/screenshots/playlists.png" width="230" alt="平台歌单浏览" /></td>
-    <td><img src="docs/screenshots/settings.png" width="230" alt="系统主题和播放设置" /></td>
-    <td><img src="docs/screenshots/favorites.png" width="230" alt="APP 收藏歌曲" /></td>
+    <td><img src="docs/screenshots/playlists.png" width="230" alt="平台歌单" /></td>
+    <td><img src="docs/screenshots/settings.png" width="230" alt="系统设置" /></td>
+    <td><img src="docs/screenshots/favorites.png" width="230" alt="我的收藏" /></td>
   </tr>
 </table>
 
-## 日常使用
+## 功能
 
-- 启动进入首页，自动播放默认关闭；侧栏提供正在播放、歌单列表、我的收藏、系统设置及搜索、本地音乐、下载管理入口。
-- 日间、夜间、跟随系统三种主题，可收起侧栏；专辑封面与黑胶显示可选。
-- 播放页使用图标控制上一首、播放／暂停、下一首；点击播放模式图标切换顺序、随机、单曲循环、列表循环。
-- 歌词支持逐行、逐字及翻译／音译显示。滑动只浏览，点击歌词才跳转播放；停止滑动 2 秒未点击，自动回到当前歌词。
-- 歌单顶部保留播放全部、收藏平台歌单及多选；下载、加入本地歌单等集中在多选操作中。
-- 播放整张歌单时替换当前队列；点击单曲时置于队列首位，保留其他歌曲。播放页队列按钮打开实际队列；右侧删除叉旁的三横杠手柄支持跟手拖动、实时让位和边缘滚动。
-- 过长歌名单行从右向左滚动，覆盖首页、播放页、歌曲列表、队列和迷你播放器。
-- 本地音乐默认自动扫描：手机媒体库、已授权目录和 U 盘；监听插拔和媒体库变化。系统未公开的 U 盘首次添加目录授权，后续自动扫描；可在“下载与存储”关闭。
-- 自动换源遵循设置开关，成功来源保存在本机；队列编辑不会删除真实歌单、收藏或音乐文件。
-- 通知栏播放控制默认开启，显示歌名、当前歌词和三个播放按钮。关闭后隐藏前台卡片；后台播放保留 Android 必需的媒体通知。
-- 平台账号优先提供上游支持的扫码入口，低频配置、WebDAV、维护工具与视频制作集中在系统设置；视频支持黑胶旋转、音乐频谱、逐字/翻译歌词和四种画幅导出。
+- 首页提供正在播放、歌单列表、我的收藏、系统设置四个模块；侧栏统一导航，可展开或收起。
+- 日间、夜间、跟随系统主题；专辑封面与旋转黑胶可选，启动自动播放默认关闭。
+- 长歌名单行向左滚动；图标控制上一首、播放／暂停、下一首；点击图标循环切换顺序、随机、单曲循环、列表循环。
+- 逐行、逐字及翻译／音译歌词。滑动浏览，点击歌词跳转播放；停止浏览 2 秒后回到当前歌词。
+- 当前播放队列支持右侧手柄拖动、实时让位、边缘滚动、移除和清空。播放整张歌单替换队列；单曲置于队首播放，保留其他歌曲。
+- 支持多平台搜索、平台账号扫码关联、个人与推荐歌单、本地歌单和红心收藏。歌单多选后可下载所选或加入本地歌单。
+- 本地音乐自动扫描媒体库和已授权目录，监听存储变化；U 盘首次添加目录授权后可持续扫描。移除本地引用保留原文件。
+- 下载管理、播放缓存、失效自动换源和成功来源保存；播放队列操作不修改原歌单。
+- 通知栏显示歌名、当前歌词及播放控制，可在设置中管理；支持系统媒体会话和音频焦点。
+- 系统设置保留上游配置，包含 WebDAV、存储管理、代理、更新、维护工具和视频制作。
 
-## 工程目录
+账号凭据由用户在应用内关联并保存在本机。源码与 APK 不预置个人账号。
+
+## 源码与构建
 
 | 目录 | 内容 |
 | --- | --- |
-| `app/` | Android 原生应用、单元测试、独立包真机测试 |
-| `engine/upstream/` | Go Music DL 源码及本项目的宿主、JSON 接口修改 |
-| `app/src/main/jniLibs/arm64-v8a/` | ARM64 引擎、FFmpeg / ffprobe 与运行库 |
-| `design/portrait-v1/` | 已确认的 HTML 交互原型 |
-| `docs/` | 技术规格、功能对照、第三方来源及验证记录 |
-| `scripts/` | 编译、安装、导出与原型队列检查脚本 |
+| `app/` | Android 原生应用 |
+| `engine/upstream/` | 上游 Go 源码、Android 宿主和 JSON 接口 |
+| `app/src/main/jniLibs/arm64-v8a/` | ARM64 音乐引擎、FFmpeg / ffprobe 与运行库 |
+| `design/portrait-v1/` | HTML 界面原型 |
+| `docs/` | 产品规格、第三方来源、截图与版本说明 |
+| `scripts/` | Release 构建与导出脚本 |
 
-引擎只监听本机 `127.0.0.1`。正式应用包名为 `com.carmusic.app`，独立测试包为 `com.carmusic.app.smoke`，分别使用端口 37777 和 37779。
+包名 `com.carmusic.app`。引擎仅监听设备本机 `127.0.0.1`，端口由系统动态分配，服务路径 `/music`。
 
-## 本地构建
-
-要求 JDK 17、Android SDK 34；重新编译引擎还需要 Go 1.25.1 或兼容版本。当前仅提供 `arm64-v8a`，最低 Android 8.0 / API 26。
-
-在 `local.properties` 中配置本机 SDK 路径，例如：
-
-```properties
-sdk.dir=C:/Android/sdk
-```
-
-Windows PowerShell：
+要求 JDK 17、Android SDK 34、Go 1.25.1 或兼容版本。通过本机 `local.properties` 配置 `sdk.dir`。构建无签名 APK：
 
 ```powershell
-$env:JAVA_HOME='你的 JDK 17 路径'
-$env:ANDROID_HOME='你的 Android SDK 路径'
-.\gradlew.bat :app:assembleDebug :app:testDebugUnitTest
+.\gradlew.bat :app:assembleRelease
 ```
 
-输出为 `app/build/outputs/apk/debug/app-debug.apk`。仓库中的 ARM64 运行库用于本地开发构建；如修改 Go 引擎，运行：
+输出 `app/build/outputs/apk/release/app-release-unsigned.apk`。正式附件使用独立签名，不允许调试。重新编译引擎并签名导出：
 
 ```powershell
-.\scripts\build-android.ps1
+.\scriptsuild-android.ps1 -KeyStore '仓库外的签名文件' -KeyAlias '签名别名' -ExportDirectory '交付目录'
 ```
 
-可选覆盖安装与文件导出：
-
-```powershell
-.\scripts\build-android.ps1 -Install -Serial '你的 ADB 设备编号' -ExportDirectory '你的交付目录'
-```
-
-Debug APK 使用本机 Android 调试签名。更换开发机器后若签名不同，无法直接覆盖原安装；正式分发需统一管理签名。
-
-## 验证
-
-真机测试使用独立测试包，避免测试运行器清除正式应用的数据：
-
-```powershell
-$env:ANDROID_SERIAL='你的 ADB 设备编号'
-.\gradlew.bat :app:connectedSmokeAndroidTest
-node .\scripts\verify-prototype-queue.cjs
-```
-
-手机需已授权 USB 调试并解锁。部分测试调用真实音乐平台，需要网络；扫码最终授权、平台限流、私人 WebDAV 服务及实车音频焦点另行验证。手机上的车机尺寸模拟不等于实车验证。
-
-此前版本的独立包真机回归 21 项通过，覆盖真实播放/歌词、通知、队列、换源、歌单布局、扫码、批量删除与视频流程。此前补齐频谱/逐字歌词后的视频专项 10 项、队列定位/字号自适应专项 5 项也全部通过；14 项单元测试及 Go `internal/web` 完整测试通过。原始报告位于 [docs/validation](docs/validation)，完整限制见 [实施状态](docs/IMPLEMENTATION_STATUS.md)。
-
-2026-10-03 新增歌名滚动、跟手队列排序、自动扫描与 U 盘目录支持，已运行真机增量与回归。长歌名实际滚动画面、媒体库自动发现／播放／移除／恢复、队列跟手换序以及相关导航、歌词、通知和自动换源已验证。队列向后自动滚动由用户真机手测确认正常；没有将自动测试超时改记为通过。详细结果与未验证范围见 [竖屏发布验证记录](docs/validation/PORTRAIT_RELEASE_2026-10-03.md)。OCR 暂缓。
-
-竖屏基线 APK：[v1.0.0 Release](https://github.com/liangle902/CarMusic/releases/tag/v1.0.0)（私有仓库，需要登录授权账号）。
+签名口令通过进程环境变量 `CARMUSIC_SIGNING_PASSWORD` 提供。签名文件、口令、SDK 路径及运行数据不提交到仓库；已有安装迁移签名时，脚本支持传入签名谱系及原签名文件。
 
 ## 来源与许可证
 
-功能来源：[GoMusicDll · GitHub](https://github.com/guohuiyuan/go-music-dl)。保留上游 GNU AGPL v3 许可证及源码；Compose、Media3、FFmpeg 等组件的来源见 [第三方说明](docs/THIRD_PARTY_NOTICES.md)。
-
-平台账号凭据、个人音乐文件、本机 SDK 路径、签名密钥和运行数据不属于源码交付内容。
+功能来源：[GoMusicDll](https://github.com/guohuiyuan/go-music-dl)。项目保留 GNU AGPL v3 许可证与上游源码，详见 [LICENSE](LICENSE)、[上游基线](docs/UPSTREAM_ORIGIN.md) 和 [第三方说明](docs/THIRD_PARTY_NOTICES.md)。

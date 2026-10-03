@@ -67,12 +67,15 @@ object ApiClient {
         return replacement
     }
     fun streamUrl(song: SongItem) = url("/download",songParams(song) + ("stream" to "1"))
+    fun playbackCacheKey(uri: android.net.Uri): String = if (uri.host == "127.0.0.1" && uri.path == "/music/download") {
+        "carmusic:" + uri.encodedPath + "?" + uri.encodedQuery.orEmpty()
+    } else uri.toString()
     fun lyricDownloadUrl(song:SongItem)=url("/download_lrc",songParams(song)+("format" to "auto"))
     private val lyricCache=java.util.concurrent.ConcurrentHashMap<String,List<LyricLine>>()
     fun invalidateLyrics(song:SongItem){lyricCache.remove(song.key)}
     fun coverUrl(source: String, cover: String): String = when {
         cover.startsWith("/") -> "http://127.0.0.1:${DaemonManager.PORT}$cover"
-        cover.startsWith("http") -> url("/cover_proxy",mapOf("url" to cover,"source" to source))
+        cover.startsWith("http") -> if (DaemonManager.PORT == 0) cover else url("/cover_proxy",mapOf("url" to cover,"source" to source))
         else -> cover
     }
     suspend fun fetchLyrics(song: SongItem): List<LyricLine> {

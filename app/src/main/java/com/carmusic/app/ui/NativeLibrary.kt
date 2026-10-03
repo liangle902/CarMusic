@@ -10,7 +10,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -49,7 +48,7 @@ fun NativeLibrary(service:PlaybackService,favoritesOnly:Boolean,navigate:(String
     fun open(item:PlaylistItem,localSongs:List<SongItem>?=null){scope.launch {busy=true;error="";try {songs=localSongs?:if(item.source=="local") ApiClient.decodeSongs(ApiClient.json("/collections/${item.id}/songs")) else ApiClient.playlistSongs(item);selected=item} catch(e:CancellationException){throw e} catch(e:Exception){error=e.message?:"歌单读取失败"} finally {busy=false}}}
     Column(Modifier.fillMaxSize()) {
         if(songs==null) {
-        Text(if(favoritesOnly) "喜欢的歌，都在这里" else "一张歌单，一段旅程",fontSize=12.sp,color=colors.onSurfaceVariant,modifier=Modifier.padding(bottom=8.dp))
+        Text(if(favoritesOnly) "喜欢的歌，都在这里" else "一张歌单，一份心情",fontSize=12.sp,color=colors.onSurfaceVariant,modifier=Modifier.padding(bottom=8.dp))
         Row(Modifier.horizontalScroll(rememberScrollState())) {FilterChip(source=="local",{source="local"},label={Text(if(favoritesOnly) "APP 收藏" else "本地歌单")},modifier=Modifier.padding(end=8.dp));capabilities.forEach {item->FilterChip(source==item.id,{source=item.id},label={Text(item.name)},modifier=Modifier.padding(end=8.dp))}}
         if(busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         if(error.isNotBlank()){Row(verticalAlignment=Alignment.CenterVertically){Text(error,Modifier.weight(1f),color=colors.error,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis);TextButton(onClick={scope.launch {load()}}){Text("重试")}}}
@@ -80,7 +79,7 @@ fun NativeLibrary(service:PlaybackService,favoritesOnly:Boolean,navigate:(String
                     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically){Text(if(mode=="mine") "我的歌单" else "推荐歌单",fontSize=17.sp);TextButton(onClick={scope.launch {load()}}){Text("刷新",fontSize=11.sp)}}
                     val lists=if(source=="local"&&mode=="mine") listOf(PlaylistItem(id="app-favorites",name="我喜欢的音乐",creator="APP 收藏",trackCount=favorites.size))+manual.map {PlaylistItem(id=it.id,name=it.name,description=it.description,cover=it.cover,creator="本地歌单")} else categoryLists?:if(mode=="mine") own else recommended
                     if(lists.isEmpty()&&!busy) {Text(if(source!="local"&&!linked&&mode=="mine") "关联账号后查看你的歌单" else "暂无歌单",fontSize=13.sp,color=colors.onSurfaceVariant,modifier=Modifier.padding(vertical=24.dp));if(!linked&&source!="local"&&mode=="mine") Button(onClick={navigate("系统设置")}){Text("关联账号")}}
-                    LazyVerticalGrid(GridCells.Fixed(2),modifier=Modifier.testTag("playlist-grid"),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalArrangement=Arrangement.spacedBy(20.dp)) {items(lists,key={it.source+":"+it.id}) {item->Column(Modifier.clickable {open(item,if(item.id=="app-favorites") favorites else null)}) {
+                    LazyVerticalGrid(GridCells.Fixed(2),modifier=Modifier,horizontalArrangement=Arrangement.spacedBy(12.dp),verticalArrangement=Arrangement.spacedBy(20.dp)) {items(lists,key={it.source+":"+it.id}) {item->Column(Modifier.clickable {open(item,if(item.id=="app-favorites") favorites else null)}) {
                         Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(14.dp)).background(colors.surfaceVariant),contentAlignment=Alignment.Center) {
                             if(item.id=="app-favorites") MusicIcon("我的收藏",Modifier.fillMaxSize(.4f)) else if(item.cover.isBlank()) StarLogo(Modifier.fillMaxSize(.6f)) else AsyncImage(ApiClient.coverUrl(item.source,item.cover),item.name,Modifier.fillMaxSize(),contentScale=ContentScale.Crop)
                         }
