@@ -39,7 +39,8 @@ class PlaylistAdaptiveTest {
             val selectBounds=ui.onNodeWithText("多选").getUnclippedBoundsInRoot()
             assertTrue("手机首屏操作应共享同一行",kotlin.math.abs((playBounds.top-selectBounds.top).value)<2f)
             ui.waitUntil(60000){AppStore.restoredResolved(broken)!=null&&AppStore.playbackChecks.value[broken.key]=="可播放"}
-            assertTrue(ApiClient.inspectStream(requireNotNull(AppStore.restoredResolved(broken))).valid)
+            val stream=ApiClient.inspectStream(ApiClient.resolvePlayable(broken))
+            assertTrue("重新检查来源应继续遵循自动换源：$stream",stream.valid)
             val list=ApiClient.decodeSongs(ApiClient.json("/collections/$id/songs"))
             assertTrue(list.any {it.key==broken.key})
             ui.onNodeWithTag("song-list").performScrollToNode(hasText("Adaptive song 20"))

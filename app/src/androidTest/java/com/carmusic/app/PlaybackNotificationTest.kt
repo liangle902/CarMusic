@@ -59,6 +59,7 @@ class PlaybackNotificationTest {
             card()!!.actions[1].actionIntent.send();await("通知暂停应控制实际播放器"){!service.isPlaying.value}
             card()!!.actions[1].actionIntent.send();await("通知播放应恢复实际播放器"){service.isPlaying.value}
             card()!!.actions[2].actionIntent.send();await("通知下一首应切换队列曲目"){service.currentSong.value?.key==next.key&&service.isPlaying.value}
+            await("切歌后系统应完成异步通知更新"){card()?.actions?.size==3}
             card()!!.actions[0].actionIntent.send();await("通知上一首应返回原曲"){service.currentSong.value?.key==song.key&&service.isPlaying.value}
             main {AppStore.setNotificationControls(false)}
             await("关闭开关应隐藏前台通知卡片"){manager.activeNotifications.isEmpty()}

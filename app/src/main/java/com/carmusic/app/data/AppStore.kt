@@ -20,13 +20,41 @@ object AppStore {
     private val prefs by lazy { com.carmusic.app.CarMusicApplication.instance.getSharedPreferences("carmusic", Context.MODE_PRIVATE) }
     val favorites by lazy { MutableStateFlow(readSongs("favorites")) }
     val imports by lazy { MutableStateFlow(readSongs("imports")) }
+    val scannedLocal by lazy { MutableStateFlow(readSongs("scannedLocal")) }
+    val autoScanLocal by lazy { MutableStateFlow(prefs.getBoolean("autoScanLocal", true)) }
+    val localFolders by lazy { MutableStateFlow(prefs.getStringSet("localFolders", emptySet())!!.toSet()) }
+    val hiddenLocalKeys by lazy { MutableStateFlow(prefs.getStringSet("hiddenLocalKeys", emptySet())!!.toSet()) }
+    var localPermissionAsked: Boolean
+        get() = prefs.getBoolean("localPermissionAsked", false)
+        set(value) { prefs.edit().putBoolean("localPermissionAsked", value).apply() }
+    fun setAutoScanLocal(value: Boolean) { autoScanLocal.value=value; prefs.edit().putBoolean("autoScanLocal",value).apply() }
+    fun addLocalFolder(uri: String) { localFolders.value=localFolders.value+uri; prefs.edit().putStringSet("localFolders",localFolders.value).apply() }
+    fun removeLocalFolder(uri: String) {
+        localFolders.value=localFolders.value-uri
+        prefs.edit().putStringSet("localFolders",localFolders.value).apply()
+        replaceScannedLocal(scannedLocal.value)
+    }
+    fun replaceScannedLocal(songs: List<SongItem>) {
+        scannedLocal.value=songs.filterNot { it.key in hiddenLocalKeys.value || "local:${it.streamUrl}" in hiddenLocalKeys.value }
+            .filter { it.extra?.get("localOrigin")!="folder" || it.extra["localRoot"] in localFolders.value }
+            .distinctBy { it.key }
+        prefs.edit().putString("scannedLocal",gson.toJson(scannedLocal.value)).apply()
+    }
+    fun removeLocalRecord(song: SongItem) {
+        hiddenLocalKeys.value=hiddenLocalKeys.value+song.key+"local:${song.streamUrl}"
+        prefs.edit().putStringSet("hiddenLocalKeys",hiddenLocalKeys.value).apply()
+        removeImport(song)
+        replaceScannedLocal(scannedLocal.value.filterNot { it.key==song.key })
+    }
+    fun restoreHiddenLocal() { hiddenLocalKeys.value=emptySet(); prefs.edit().remove("hiddenLocalKeys").apply() }
     val recent by lazy {MutableStateFlow(readSongs("recent"))}
     fun recordRecent(song:SongItem){recent.value=(listOf(song)+recent.value.filterNot {it.key==song.key}).take(100);prefs.edit().putString("recent",gson.toJson(recent.value)).apply()}
     fun clearRecent(){recent.value=emptyList();prefs.edit().remove("recent").apply()}
     val playbackSpeed by lazy {MutableStateFlow(prefs.getFloat("playbackSpeed",1f))}
     fun setPlaybackSpeed(speed:Float){playbackSpeed.value=speed;prefs.edit().putFloat("playbackSpeed",speed).apply()}
     fun removeImport(song: SongItem) { imports.value = imports.value.filterNot {it.key==song.key};prefs.edit().putString("imports",gson.toJson(imports.value)).apply() }
-    fun addImport(song: SongItem) { imports.value = (imports.value + song).distinctBy { it.key }; prefs.edit().putString("imports",gson.toJson(imports.value)).apply() }
+    fun addImport(song: SongItem) = addImports(listOf(song))
+    fun addImports(songs: List<SongItem>) { hiddenLocalKeys.value=hiddenLocalKeys.value-songs.flatMap {listOf(it.key,"local:${it.streamUrl}")}.toSet(); imports.value=(imports.value+songs).distinctBy {it.key}; prefs.edit().putString("imports",gson.toJson(imports.value)).putStringSet("hiddenLocalKeys",hiddenLocalKeys.value).apply() }
     fun cachePlaylists(source: String, items: List<com.carmusic.app.ui.model.PlaylistItem>) { prefs.edit().putString("playlists_$source",gson.toJson(items)).apply() }
     fun cachedPlaylists(source: String): List<com.carmusic.app.ui.model.PlaylistItem> = runCatching { gson.fromJson(prefs.getString("playlists_$source","[]"),Array<com.carmusic.app.ui.model.PlaylistItem>::class.java).toList() }.getOrDefault(emptyList())
     val theme by lazy { MutableStateFlow(prefs.getString("theme", "system") ?: "system") }

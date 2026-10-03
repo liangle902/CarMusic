@@ -33,8 +33,8 @@ fun NativeHome(service:PlaybackService,navigate:(String)->Unit) {
                     }
                     Column(Modifier.weight(1f)) {
                         Text(if(playing) "正在播放" else "上次听到这里",color=colors.primary,fontSize=11.sp)
-                        Text(song?.name?:"开启一段音乐旅程",fontSize=22.sp,maxLines=2,modifier=Modifier.padding(top=10.dp))
-                        Text(song?.let {"${it.artist} · ${it.album}"}?:"选择一首喜欢的歌",color=colors.onSurfaceVariant,fontSize=12.sp,modifier=Modifier.padding(vertical=8.dp))
+                        SongTitle(song?.name?:"开启一段音乐旅程",fontSize=22.sp,modifier=Modifier.padding(top=10.dp))
+                        Text(song?.let {"${it.artist} · ${it.album}"}?:"选择一首喜欢的歌",color=colors.onSurfaceVariant,fontSize=12.sp,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis,modifier=Modifier.padding(vertical=8.dp))
                         Button(onClick={if(song==null) navigate("歌单列表") else {if(!playing) service.togglePlayPause();navigate("正在播放")}},shape=RoundedCornerShape(12.dp),contentPadding=PaddingValues(horizontal=12.dp,vertical=8.dp)) {Text(if(song==null) "选择音乐" else if(playing) "进入播放" else "继续播放",fontSize=12.sp)}
                         if(song!=null) Text("${homeTime(position)} / ${homeTime(song!!.duration*1000)}",fontSize=10.sp,color=colors.onSurfaceVariant,modifier=Modifier.padding(top=8.dp))
                     }
@@ -53,7 +53,7 @@ fun NativeHome(service:PlaybackService,navigate:(String)->Unit) {
         }
         Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween){Text("最近听过",fontSize=20.sp);TextButton(onClick={navigate("最近听过")}){Text("查看全部",fontSize=12.sp)}}
         if(recent.isEmpty()) Text("播放过的音乐会留在这里",color=colors.onSurfaceVariant,fontSize=12.sp)
-        else Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(12.dp)) {recent.take(3).forEach {item->Surface(onClick={service.playSongFirst(item);navigate("正在播放")},color=colors.surface,shape=RoundedCornerShape(14.dp)) {Column(Modifier.width(112.dp).padding(10.dp)){AsyncImage(ApiClient.coverUrl(item.source,item.cover),item.name,Modifier.size(92.dp).clip(RoundedCornerShape(10.dp)),contentScale=ContentScale.Crop);Text(item.name,maxLines=1,fontSize=13.sp,modifier=Modifier.padding(top=8.dp));Text(item.artist,maxLines=1,fontSize=10.sp,color=colors.onSurfaceVariant)}}}}
+        else Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(12.dp)) {recent.take(3).forEach {item->Surface(onClick={service.playSongFirst(item);navigate("正在播放")},color=colors.surface,shape=RoundedCornerShape(14.dp)) {Column(Modifier.width(112.dp).padding(10.dp)){AsyncImage(ApiClient.coverUrl(item.source,item.cover),item.name,Modifier.size(92.dp).clip(RoundedCornerShape(10.dp)),contentScale=ContentScale.Crop);SongTitle(item.name,fontSize=13.sp,modifier=Modifier.padding(top=8.dp));Text(item.artist,maxLines=1,fontSize=10.sp,color=colors.onSurfaceVariant)}}}}
         Spacer(Modifier.height(8.dp))
     }
 }

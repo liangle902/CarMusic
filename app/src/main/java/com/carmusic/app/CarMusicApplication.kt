@@ -16,6 +16,7 @@ class CarMusicApplication : Application() {
         instance = this
         Log.i("CarMusic", "Application starting, initializing Go daemon engine...")
         DaemonManager.ensureDaemonRunning(this)
+        com.carmusic.app.data.LocalMusicScanner.start(this)
     }
 
     override fun onTerminate() {

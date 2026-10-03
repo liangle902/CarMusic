@@ -21,8 +21,10 @@ class OnlinePlaybackTest {
         try {
             ApiClient.saveSettings(settings.deepCopy().apply {addProperty("autoSwitchInvalidSources",true);addProperty("autoCacheOnPlay",false)})
             val song=ApiClient.searchSongs("晴天 周杰伦","kuwo").first {it.name=="晴天"&&it.artist=="周杰伦"}
-            assertTrue("搜索结果必须可解析",ApiClient.inspectStream(song).valid)
-            assertTrue("真实源端应返回歌词",ApiClient.fetchLyrics(song).size>5)
+            val playable=ApiClient.resolvePlayable(song)
+            val stream=ApiClient.inspectStream(playable)
+            assertTrue("搜索结果应通过自动换源获得可播放来源：$stream",stream.valid)
+            assertTrue("真实源端应返回歌词",ApiClient.fetchLyrics(playable).size>5)
             instrumentation.uiAutomation.executeShellCommand("am start -W -f 0x10008000 -n ${context.packageName}/com.carmusic.app.MainActivity").use {descriptor->java.io.FileInputStream(descriptor.fileDescriptor).use {it.readBytes()}}
             assertTrue(context.bindService(Intent(context,PlaybackService::class.java),connection,Context.BIND_AUTO_CREATE))
             val service=future.get(10,TimeUnit.SECONDS)

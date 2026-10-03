@@ -32,6 +32,7 @@ class NativeNavigationTest {
         assertFalse("手机已锁屏，请解锁后运行界面测试",(instrumentation.targetContext.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager).isDeviceLocked)
         val id=instrumentation.targetContext.packageName
         listOf("input keyevent 224","wm dismiss-keyguard","am start -W -f 0x10008000 -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n $id/com.carmusic.app.MainActivity").forEach {command -> instrumentation.uiAutomation.executeShellCommand(command).use { descriptor -> java.io.FileInputStream(descriptor.fileDescriptor).use { it.readBytes() } }}
+        ui.waitUntil(15000) {runCatching {ui.onAllNodesWithContentDescription("正在播放 导航").fetchSemanticsNodes().isNotEmpty()}.getOrDefault(false)}
     }
     @Test fun homeNavigationThemesAndSidebarWork() {
         val context=InstrumentationRegistry.getInstrumentation().targetContext
@@ -61,7 +62,7 @@ class NativeNavigationTest {
         } finally {ui.runOnIdle {AppStore.setTheme(originalTheme)}}
         ui.onNodeWithText("下载与存储").performScrollTo().performClick()
         ui.onNodeWithText("本地音乐与下载").performClick()
-        ui.onNodeWithText("导入本地音乐").assertIsDisplayed()
+        ui.onNodeWithText("导入文件").assertIsDisplayed()
         ui.waitUntil(15000) {ui.onAllNodesWithText("CarMusic Test Audio").fetchSemanticsNodes().isNotEmpty()}
         ui.onNodeWithText("CarMusic Test Audio").performClick()
         ui.waitUntil(15000) {ui.onAllNodesWithContentDescription("暂停").fetchSemanticsNodes().isNotEmpty()}
@@ -102,7 +103,7 @@ class NativeNavigationTest {
             ui.onNodeWithContentDescription("打开播放队列").performClick()
             ui.onNodeWithContentDescription("拖动排序 Queue One").assertExists()
             ui.onNodeWithContentDescription("上移 Queue One").assertDoesNotExist()
-            ui.onNode(hasText("Queue One") and hasAnyAncestor(hasScrollAction())).performTouchInput {down(center);advanceEventTime(700);moveBy(Offset(0f,-220f));up()}
+            ui.onNodeWithContentDescription("拖动排序 Queue One").performTouchInput {swipeUp(startY=centerY,endY=centerY-220f,durationMillis=600)}
             ui.waitUntil(5000) {service.playlist.value.firstOrNull()?.key==first.key}
             ui.runOnIdle {assertEquals(service.playlist.value,AppStore.restoredQueue());service.removeFromQueue(first)}
             ui.waitUntil(15000) {service.currentSong.value?.key==second.key && service.isPlaying.value}

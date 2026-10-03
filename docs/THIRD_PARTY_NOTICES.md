@@ -11,5 +11,6 @@
 | AndroidX / Compose / Media3 | Google AndroidX Maven | 原生界面、媒体会话、播放和缓存；Apache 2.0。版本在 `app/build.gradle.kts`。 |
 | OkHttp / Gson / ZXing | 各组件官方 Maven 发布 | 请求、JSON、二维码；Apache 2.0。 |
 | Coil | Coil 官方 Maven 发布 | 封面加载；Apache 2.0。 |
+| Reorderable 2.2.0 | https://github.com/Calvin-LL/Reorderable/tree/v2.2.0 | `sh.calvin.reorderable:reorderable`；队列拖动跟手、实时让位和边缘滚动；Apache 2.0。与当前 Compose 1.6.6 配套使用。 |
 
 目前 APK 为本地开发验证构建，不代表已完成面向公众的分发材料。源码和二进制来源应在发布时保持一致。

@@ -3,8 +3,6 @@ package com.carmusic.app.ui
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -38,6 +36,7 @@ fun CarMusicScreen(service: PlaybackService) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     var queueOpen by remember { mutableStateOf(false) }
     var splash by rememberSaveable { mutableStateOf(true) }
+    LocalMusicPermissionPrompt(ready = !splash)
     BackHandler(page!="首页" || queueOpen || splash) {if(splash) splash=false else if(queueOpen) queueOpen=false else page=if(page in listOf("本地音乐","视频制作")) "系统设置" else if(page=="本地歌单") "歌单列表" else "首页"}
     val current by service.currentSong.collectAsState()
     val playing by service.isPlaying.collectAsState()
@@ -93,13 +92,13 @@ fun CarMusicScreen(service: PlaybackService) {
                 }
                 if (page !in listOf("正在播放","首页") && current != null) Surface(onClick = { page = "正在播放" }, tonalElevation = 3.dp, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
                     Column {
-                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) { Text(current!!.name, Modifier.weight(1f), maxLines = 1);IconButton(onClick=service::togglePlayPause,modifier=Modifier.semantics {contentDescription=if(playing) "暂停" else "播放"}){MusicIcon(if(playing) "暂停" else "播放")};IconButton(onClick={queueOpen=true},modifier=Modifier.semantics {contentDescription="打开播放队列"}){MusicIcon("播放队列")} }
+                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) { SongTitle(current!!.name, Modifier.weight(1f));IconButton(onClick=service::togglePlayPause,modifier=Modifier.semantics {contentDescription=if(playing) "暂停" else "播放"}){MusicIcon(if(playing) "暂停" else "播放")};IconButton(onClick={queueOpen=true},modifier=Modifier.semantics {contentDescription="打开播放队列"}){MusicIcon("播放队列")} }
                     MiniLyric(service)
                     }
                 }
             }
         }
-        if (queueOpen) ModalBottomSheet(onDismissRequest = { queueOpen = false }) { NativeQueue(service) }
+        if (queueOpen) ModalBottomSheet(onDismissRequest = { queueOpen = false }, sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)) { NativeQueue(service) }
         if (splash) Surface(Modifier.fillMaxSize().clickable { splash = false }, color = Color(0xFF0C2029)) {
             Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 StarLogo(Modifier.size(120.dp),animated=true); Spacer(Modifier.height(30.dp)); Text("星河音乐", fontSize = 36.sp, color = Color.White); Spacer(Modifier.height(28.dp)); FlowingSlogan(Modifier.fillMaxWidth(.9f).height(70.dp)); Text("为每一段旅程，留一首好歌。", color = Color(0xFFADBEC6), modifier = Modifier.padding(top = 16.dp))
@@ -154,7 +153,7 @@ private fun NativePlayer(service: PlaybackService, openQueue: () -> Unit) {
             itemsIndexed(lyrics) { index,line -> TimedLyricText(line,position,index==active) {browsingLyrics=false;service.seekTo(line.timeMs)} }
         }
         }
-        Row(Modifier.fillMaxWidth().padding(top=18.dp),verticalAlignment=Alignment.CenterVertically) {Column(Modifier.weight(1f)){Text(song?.name ?: "还没有正在播放的歌曲", fontSize = 24.sp,maxLines=1);Text(song?.let {"${it.artist} · ${it.album}"} ?: "去歌单或搜索中选择音乐",color=MaterialTheme.colorScheme.onSurfaceVariant,fontSize=12.sp,modifier=Modifier.padding(top=8.dp,bottom=12.dp))};TextButton(onClick=service::toggleFavorite,enabled=song!=null){Text(if(favorite) "♥" else "♡",fontSize=25.sp,color=if(favorite) Color(0xFFE85063) else MaterialTheme.colorScheme.onSurfaceVariant)}}
+        Row(Modifier.fillMaxWidth().padding(top=18.dp),verticalAlignment=Alignment.CenterVertically) {Column(Modifier.weight(1f)){SongTitle(song?.name ?: "还没有正在播放的歌曲", modifier=Modifier.testTag("player-song-title"), fontSize = 24.sp);Text(song?.let {"${it.artist} · ${it.album}"} ?: "去歌单或搜索中选择音乐",color=MaterialTheme.colorScheme.onSurfaceVariant,fontSize=12.sp,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis,modifier=Modifier.padding(top=8.dp,bottom=12.dp))};TextButton(onClick=service::toggleFavorite,enabled=song!=null){Text(if(favorite) "♥" else "♡",fontSize=25.sp,color=if(favorite) Color(0xFFE85063) else MaterialTheme.colorScheme.onSurfaceVariant)}}
         song?.let { SongSourceStatus(it) }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error, maxLines = 2) }
         Slider(value = position.toFloat().coerceIn(0f,duration.toFloat().coerceAtLeast(1f)), onValueChange = { service.seekTo(it.toLong()) }, valueRange = 0f..duration.toFloat().coerceAtLeast(1f), enabled = song != null)
@@ -222,7 +221,7 @@ private fun SongList(songs: List<SongItem>, service: PlaybackService, empty: Str
             Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 if(batch) Checkbox(song.key in selectedKeys,{checked->selectedKeys=if(checked) selectedKeys+song.key else selectedKeys-song.key},modifier=Modifier.semantics {contentDescription="选择 ${song.name}"})
                 AsyncImage(ApiClient.coverUrl(song.source,song.cover),"封面",Modifier.size(48.dp).clip(RoundedCornerShape(10.dp)).clickable {service.playSongFirst(song)})
-                Column(Modifier.weight(1f).padding(start = 12.dp).clickable {service.playSongFirst(song)}) { Text(song.name, maxLines = 1); Text(song.artist, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1);SongSourceStatus(song) }
+                Column(Modifier.weight(1f).padding(start = 12.dp).clickable {service.playSongFirst(song)}) { SongTitle(song.name); Text(song.artist, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1);SongSourceStatus(song) }
                 val liked=favorites.any {it.key==song.key}
                 TextButton(onClick = { AppStore.toggleFavorite(song) }) { Text(if(liked) "♥" else "♡", color = if(liked) Color(0xFFE85063) else MaterialTheme.colorScheme.onSurfaceVariant) }
                 Box { TextButton(onClick = {menu=true},modifier=Modifier.semantics {contentDescription="歌曲操作 ${song.name}"}) {Text("⋮")}; DropdownMenu(menu,{menu=false}) {
@@ -244,24 +243,6 @@ private fun SongList(songs: List<SongItem>, service: PlaybackService, empty: Str
     switching?.let { SourcePicker(it,service,{switching=null}) }
     exporting?.let {(song,cover)->SongAssetExport(song,cover,{exporting=null},{message=it})}
     if(batchAdding) CollectionPicker(selectedSongs,{batchAdding=false},{message=it})
-}
-
-@Composable
-private fun NativeQueue(service: PlaybackService) {
-    val queue by service.playlist.collectAsState()
-    val current by service.currentSong.collectAsState()
-    val latestQueue by rememberUpdatedState(queue)
-    val queueState=rememberLazyListState(initialFirstVisibleItemIndex=(queue.indexOfFirst {it.key==current?.key}-1).coerceAtLeast(0))
-    val threshold = with(androidx.compose.ui.platform.LocalDensity.current) { 64.dp.toPx() }
-    var confirm by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().padding(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) { Text("播放队列 · ${queue.size}",Modifier.weight(1f),fontSize = 22.sp); TextButton(onClick = { confirm = true }) { Text("清空") } }
-        Text("只影响本次播放，移除不会修改歌单或收藏。",fontSize=11.sp,color=MaterialTheme.colorScheme.onSurfaceVariant,modifier=Modifier.padding(bottom=12.dp))
-        LazyColumn(Modifier.heightIn(max = 540.dp),state=queueState) { itemsIndexed(queue,key = { _,song -> song.key }) { index,song ->
-            Row(Modifier.fillMaxWidth().pointerInput(song.key) { var travel = 0f; detectDragGesturesAfterLongPress(onDragStart = {travel=0f}, onDrag = {change,delta -> change.consume();travel+=delta.y;if(kotlin.math.abs(travel)>threshold){val from=latestQueue.indexOfFirst {it.key==song.key};service.moveQueue(from,from+if(travel>0) 1 else -1);travel=0f}}) },verticalAlignment = Alignment.CenterVertically) { MusicIcon("拖动",Modifier.padding(end=8.dp).size(24.dp).semantics {contentDescription="拖动排序 ${song.name}"},MaterialTheme.colorScheme.onSurfaceVariant);Column(Modifier.weight(1f).clickable {service.playSong(song)}.padding(vertical=16.dp)){Text(song.name,maxLines=1,color=if(current?.key==song.key) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface);Text(song.artist,fontSize=11.sp,maxLines=1,color=MaterialTheme.colorScheme.onSurfaceVariant);SongSourceStatus(song)};IconButton(onClick={service.removeFromQueue(song)},modifier=Modifier.size(40.dp).semantics {contentDescription="移出队列 ${song.name}"}){Text("×",fontSize=23.sp)} }
-        } }
-    }
-    if (confirm) AlertDialog(onDismissRequest = { confirm=false },title = { Text("清空播放队列？") },text = { Text("不会删除歌单或收藏中的歌曲。") },confirmButton = { TextButton(onClick = { service.clearQueue();confirm=false }) { Text("清空") } },dismissButton = { TextButton(onClick = {confirm=false}) {Text("取消")} })
 }
 
 @Composable
@@ -338,6 +319,8 @@ private fun NativeSettings(service:PlaybackService,replay: () -> Unit, library: 
         Text("恢复上次的队列与进度 · 始终保留",style=MaterialTheme.typography.bodySmall)
         }
         if(section=="下载与存储") {
+        val autoScanLocal by AppStore.autoScanLocal.collectAsState()
+        SettingSwitch("自动扫描本地音乐与U盘",autoScanLocal,AppStore::setAutoScanLocal)
         TextButton(onClick=library){Text("本地音乐与下载")}
         MaintenanceTools(service)
         }

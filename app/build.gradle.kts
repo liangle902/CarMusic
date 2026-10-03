@@ -84,6 +84,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
+    implementation("sh.calvin.reorderable:reorderable:2.2.0")
 
     // AndroidX Media3 (ExoPlayer, MediaSession, AudioFocus)
     val media3Version = "1.3.1"
