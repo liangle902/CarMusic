@@ -6,11 +6,24 @@
 
 Kotlin / Jetpack Compose 构建界面，Media3 / ExoPlayer 负责播放，搜索、平台歌单、账号关联、下载与自动换源复用 [GoMusicDll](https://github.com/guohuiyuan/go-music-dl)。
 
-[下载 v1.0.0](https://github.com/liangle902/CarMusic/releases/tag/v1.0.0) · [项目仓库](https://github.com/liangle902/CarMusic)（私有仓库，需要授权访问）。Android 8.0 及以上，ARM64。
+[下载 v1.5.0](https://github.com/liangle902/CarMusic/releases/tag/v1.5.0) · [项目仓库](https://github.com/liangle902/CarMusic)（私有仓库，需要授权访问）。Android 8.0 及以上，ARM64。
 
-v1.0.0 提供竖屏界面，v1.5.0 将支持手机横屏与横屏车机的自适应布局；v2.0.0 将在车机实测导航语音避让、媒体按键与播放状态同步后发布。
+v1.5.0 支持竖屏与横屏自适应，手机旋转时自动切换布局，适配平板和横屏车机；v2.0.0 将在车机实测导航语音避让、媒体按键与播放状态同步后发布。
 
 ## 界面
+
+横屏界面根据可用高度调整封面、歌词、列表和操作区；搜索结果占满内容宽度，音源通过筛选入口选择。
+
+<table>
+  <tr><th>横屏首页</th><th>横屏播放</th></tr>
+  <tr><td><img src="docs/screenshots/landscape-home.png" width="460" alt="横屏首页与模块入口" /></td><td><img src="docs/screenshots/landscape-playing.png" width="460" alt="横屏封面、歌词与播放控制" /></td></tr>
+  <tr><th>横屏歌单</th><th>横屏搜索</th></tr>
+  <tr><td><img src="docs/screenshots/landscape-playlists.png" width="460" alt="横屏平台歌单列表" /></td><td><img src="docs/screenshots/landscape-search.png" width="460" alt="横屏搜索与音源筛选" /></td></tr>
+  <tr><th>横屏设置</th><th>横屏队列</th></tr>
+  <tr><td><img src="docs/screenshots/landscape-settings.png" width="460" alt="横屏系统设置" /></td><td><img src="docs/screenshots/landscape-queue.png" width="460" alt="横屏播放队列" /></td></tr>
+</table>
+
+竖屏界面：
 
 <table>
   <tr><th>首页</th><th>正在播放</th><th>播放队列</th></tr>
@@ -29,6 +42,7 @@ v1.0.0 提供竖屏界面，v1.5.0 将支持手机横屏与横屏车机的自适
 
 ## 功能
 
+- 横竖屏自动适配，共享搜索、歌单、账号和播放状态，旋转时保留当前页面与播放进度。
 - 首页提供正在播放、歌单列表、我的收藏、系统设置四个模块；侧栏统一导航，可展开或收起。
 - 日间、夜间、跟随系统主题；专辑封面与旋转黑胶可选，启动自动播放默认关闭。
 - 长歌名单行向左滚动；图标控制上一首、播放／暂停、下一首；点击图标循环切换顺序、随机、单曲循环、列表循环。
@@ -49,7 +63,7 @@ v1.0.0 提供竖屏界面，v1.5.0 将支持手机横屏与横屏车机的自适
 | `app/` | Android 原生应用 |
 | `engine/upstream/` | 上游 Go 源码、Android 宿主和 JSON 接口 |
 | `app/src/main/jniLibs/arm64-v8a/` | ARM64 音乐引擎、FFmpeg / ffprobe 与运行库 |
-| `design/portrait-v1/` | HTML 界面原型 |
+| `design/portrait-v1/`、`design/landscape-v1/` | 横竖屏 HTML 界面原型 |
 | `docs/` | 产品规格、第三方来源、截图与版本说明 |
 | `scripts/` | Release 构建与导出脚本 |
 

@@ -38,7 +38,7 @@ private val musicPaths=mapOf(
 )
 
 @Composable
-fun MusicIcon(name:String,modifier:Modifier=Modifier.size(24.dp),color:Color=MaterialTheme.colorScheme.primary) {
+fun MusicIcon(name:String,modifier:Modifier=Modifier.size(24.dp),color:Color=MaterialTheme.colorScheme.primary,filled:Boolean=false) {
     val path=androidx.core.graphics.PathParser.createPathFromPathData(musicPaths[name]?:musicPaths.getValue("本地音乐"))!!.asComposePath()
-    Canvas(modifier) {withTransform({scale(size.width/24f,size.height/24f,pivot=Offset.Zero)}) {drawPath(path,color,style=Stroke(1.65f,cap=androidx.compose.ui.graphics.StrokeCap.Round,join=androidx.compose.ui.graphics.StrokeJoin.Round))}}
+    Canvas(modifier) {withTransform({scale(size.width/24f,size.height/24f,pivot=Offset.Zero)}) {drawPath(path,color,style=if(filled) androidx.compose.ui.graphics.drawscope.Fill else Stroke(1.65f,cap=androidx.compose.ui.graphics.StrokeCap.Round,join=androidx.compose.ui.graphics.StrokeJoin.Round))}}
 }

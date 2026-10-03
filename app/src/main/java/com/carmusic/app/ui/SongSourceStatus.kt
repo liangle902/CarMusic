@@ -30,5 +30,5 @@ fun SongSourceStatus(song:SongItem) {
             }} catch(e:CancellationException){if(AppStore.playbackChecks.value[song.key] in listOf("检测中","自动换源中")) AppStore.markPlayback(song,"待检测");throw e} catch(_:Exception){AppStore.markPlayback(song,"未找到可用音源")}
         }
     }
-    Text("${sourceName(song.source)} · $status"+(resolved?.takeIf {it.key!=song.key}?.let {" · 已换源 ${sourceName(it.source)}"}?:""),maxLines=1,overflow=TextOverflow.Ellipsis,fontSize=10.sp,color=if(status in listOf("音源失效","当前源失效","检测失败","未找到可用音源")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+    Text("${sourceName(song.source)} · $status"+(resolved?.takeIf {it.key!=song.key}?.let {" · 已换源 ${sourceName(it.source)}"}?:""),maxLines=1,overflow=TextOverflow.Ellipsis,fontSize=10.sp,lineHeight=if(LocalMusicWindow.current.compactHeight) 14.sp else androidx.compose.ui.unit.TextUnit.Unspecified,color=if(status in listOf("音源失效","当前源失效","检测失败","未找到可用音源")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
 }

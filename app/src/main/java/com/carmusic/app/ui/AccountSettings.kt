@@ -2,6 +2,7 @@ package com.carmusic.app.ui
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
@@ -87,8 +88,16 @@ fun AccountSettings() {
         LaunchedEffect(data) {
             pollQrLogin(data.get("expires_at")?.asLong?.takeIf {it>0}?:System.currentTimeMillis()/1000+600,{checkStatus()},{update(it)},{status="状态查询暂时失败，正在重试"})
         }
-        AlertDialog(onDismissRequest={session=null},title={Text("扫码关联")},text={Column {
-            if(bitmap!=null) Image(bitmap.asImageBitmap(),"登录二维码",Modifier.size(240.dp)) else if(!image.isNullOrBlank()&&!image.startsWith("data:")) AsyncImage(image,"登录二维码",Modifier.size(240.dp)) else Text("二维码内容无法解析，请重新生成",color=MaterialTheme.colorScheme.error)
+        AlertDialog(onDismissRequest={session=null},modifier=Modifier.widthIn(max=if(LocalMusicWindow.current.compactHeight) 560.dp else 360.dp).fillMaxWidth(.9f),properties=androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth=false),title={Text("扫码关联")},text={
+            BoxWithConstraints(Modifier.fillMaxWidth().heightIn(max=musicDialogContentHeight())) {
+                val sideBySide=LocalMusicWindow.current.compactHeight&&maxWidth>=360.dp
+                val qrSize=if(sideBySide) 144.dp else minOf(240.dp,musicDialogContentHeight())
+                val qr:@Composable ()->Unit={
+                    if(bitmap!=null) Image(bitmap.asImageBitmap(),"登录二维码",Modifier.size(qrSize))
+                    else if(!image.isNullOrBlank()&&!image.startsWith("data:")) AsyncImage(image,"登录二维码",Modifier.size(qrSize))
+                    else Text("二维码内容无法解析，请重新生成",color=MaterialTheme.colorScheme.error)
+                }
+                val statusPanel:@Composable ()->Unit={Column {
             Text(status)
             if(cooldownSeconds>0) Text("${cooldownSeconds} 秒后自动检查登录状态")
             else if(sms==null) TextButton(onClick={scope.launch {checking=true;try {update(checkStatus())} catch(e:CancellationException){throw e} catch(_:Exception){status="状态查询暂时失败，正在重试"} finally {checking=false}}},enabled=!checking){Text(if(checking) "检查中…" else "检查登录状态")}
@@ -97,7 +106,14 @@ fun AccountSettings() {
                 if(up){Text("使用绑定手机号发送 ${field(extra,"up_sms_content")} 到 ${field(extra,"up_sms_mobile")}");TextButton(onClick={scope.launch {smsAction("up_sms")}},enabled=!smsBusy){Text("我已发送")}}
                 else {TextButton(onClick={scope.launch {smsAction("send_code")}},enabled=!smsBusy){Text("发送验证码")};OutlinedTextField(smsCode,{smsCode=it},label={Text("短信验证码")});TextButton(onClick={scope.launch {smsAction("validate")}},enabled=!smsBusy&&smsCode.isNotBlank()){Text("确认登录")}}
             }
-        }},confirmButton={TextButton(onClick={session=null}){Text("关闭")}},dismissButton={TextButton(onClick={session=null;scope.launch {generating=true;try {session=ApiClient.json("/qr_login/$sessionSource",method="POST").asJsonObject} catch(e:CancellationException){throw e} catch(e:Exception){message=e.message?:"重新生成失败"} finally {generating=false}}}){Text("重新生成")}})
+                }}
+                if(sideBySide) Row(horizontalArrangement=Arrangement.spacedBy(20.dp),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
+                    qr();Column(Modifier.weight(1f).heightIn(max=musicDialogContentHeight()).verticalScroll(rememberScrollState())) {statusPanel()}
+                } else Column(Modifier.verticalScroll(rememberScrollState()),horizontalAlignment=androidx.compose.ui.Alignment.CenterHorizontally) {
+                    qr();Spacer(Modifier.height(12.dp));statusPanel()
+                }
+            }
+        },confirmButton={TextButton(onClick={session=null}){Text("关闭")}},dismissButton={TextButton(onClick={session=null;scope.launch {generating=true;try {session=ApiClient.json("/qr_login/$sessionSource",method="POST").asJsonObject} catch(e:CancellationException){throw e} catch(e:Exception){message=e.message?:"重新生成失败"} finally {generating=false}}}){Text("重新生成")}})
 
     }
 }

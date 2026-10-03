@@ -29,7 +29,7 @@ internal fun TimedLyricText(line:LyricLine,position:Long,active:Boolean,onClick:
         }
     }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-    val compact=maxWidth<160.dp
+    val compact=maxWidth<160.dp||LocalMusicWindow.current.compactHeight
     Column(Modifier.fillMaxWidth().clickable(onClick=onClick).padding(vertical=12.dp)) {
         Text(text,color=if(active) colors.primary else base,fontSize=if(compact) {if(active) 16.sp else 14.sp} else {if(active) 22.sp else 18.sp},textAlign=TextAlign.Center,modifier=Modifier.fillMaxWidth())
         if(line.romanization.isNotBlank()) Text(line.romanization,color=base,fontSize=12.sp,textAlign=TextAlign.Center,modifier=Modifier.fillMaxWidth().padding(top=5.dp))

@@ -40,7 +40,7 @@ fun MaintenanceTools(service:PlaybackService) {
     TextButton(onClick={scope.launch {busy=true;try {val settings=ApiClient.settings();val result=ApiClient.json("/github_proxy/test",mapOf("proxy" to (settings.get("githubProxyUrl")?.asString?:""))).asJsonObject;message=if(result.get("ok")?.asBoolean==true) "代理连接成功 · ${result.get("latency_ms").asLong} ms" else result.get("error")?.asString?:"代理连接失败"} catch(e:CancellationException){throw e} catch(e:Exception){message=e.message?:"测试失败"} finally {busy=false}}},enabled=!busy){Text("测试 GitHub 代理")}
     TextButton(onClick={scope.launch {busy=true;try {val result=ApiClient.json("/app_update/check").asJsonObject;message="上游版本：${result.get("latest_version")?.asString?:"未知"}";val link=result.get("release_url")?.asString;if(!link.isNullOrBlank()) context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(link)))} catch(e:CancellationException){throw e} catch(e:Exception){message=e.message?:"检查失败"} finally {busy=false}}},enabled=!busy){Text("查看上游更新")}
     if(panel.isEmpty() && message.isNotEmpty()) Text(message)
-    if(panel.isNotEmpty()) AlertDialog(onDismissRequest={panel=""},title={Text(panel)},text={Column(Modifier.heightIn(max=440.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+    if(panel.isNotEmpty()) AlertDialog(onDismissRequest={panel=""},title={Text(panel)},text={Column(Modifier.heightIn(max=musicDialogContentHeight(440.dp)).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)) {
         if(busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         if(message.isNotEmpty()) Text(message)
         val entries=data?.getAsJsonArray(if(panel=="下载记录") "records" else "groups")

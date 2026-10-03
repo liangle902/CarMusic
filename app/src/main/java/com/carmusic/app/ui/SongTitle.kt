@@ -19,6 +19,7 @@ internal fun SongTitle(
     text: String,
     modifier: Modifier = Modifier,
     fontSize: TextUnit = TextUnit.Unspecified,
+    lineHeight: TextUnit = TextUnit.Unspecified,
     color: Color = LocalContentColor.current,
     fontWeight: FontWeight? = null,
     scrolling: Boolean = true
@@ -32,6 +33,7 @@ internal fun SongTitle(
             velocity = 28.dp
         ) else modifier,
         fontSize = fontSize,
+        lineHeight = lineHeight,
         color = color,
         fontWeight = fontWeight,
         maxLines = 1,

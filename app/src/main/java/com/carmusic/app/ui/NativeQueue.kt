@@ -41,7 +41,7 @@ internal fun NativeQueue(service: PlaybackService) {
         service.moveQueue(live.indexOfFirst { it.key == from.key }, live.indexOfFirst { it.key == to.key })
     }
     var confirm by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().padding(16.dp)) {
+    Column(Modifier.fillMaxWidth().heightIn(max=(LocalMusicWindow.current.height-48.dp).coerceAtLeast(120.dp)).padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("播放队列 · ${queue.size}", Modifier.weight(1f), fontSize = 22.sp)
             TextButton(onClick = { confirm = true }, enabled = queue.isNotEmpty()) { Text("清空") }
@@ -50,7 +50,7 @@ internal fun NativeQueue(service: PlaybackService) {
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 12.dp))
         if (queue.isEmpty()) Text("播放队列为空", Modifier.padding(vertical = 24.dp))
         LazyColumn(
-            Modifier.fillMaxWidth().heightIn(max = 540.dp),
+            Modifier.fillMaxWidth().weight(1f,fill=false).heightIn(max = 540.dp),
             state = state,
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
