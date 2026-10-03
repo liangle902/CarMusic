@@ -6,7 +6,7 @@
 
 Kotlin / Jetpack Compose 构建界面，Media3 / ExoPlayer 负责播放，搜索、平台歌单、账号关联、下载与自动换源复用 [GoMusicDll](https://github.com/guohuiyuan/go-music-dl)。
 
-[下载 v1.5.0](https://github.com/liangle902/CarMusic/releases/tag/v1.5.0) · [项目仓库](https://github.com/liangle902/CarMusic)（私有仓库，需要授权访问）。Android 8.0 及以上，ARM64。
+[下载 v1.5.0](https://github.com/liangle902/CarMusic/releases/tag/v1.5.0) · [项目仓库](https://github.com/liangle902/CarMusic)。Android 8.0 及以上，ARM64。
 
 v1.5.0 支持竖屏与横屏自适应，手机旋转时自动切换布局，适配平板和横屏车机；v2.0.0 将在车机实测导航语音避让、媒体按键与播放状态同步后发布。
 

@@ -1,6 +1,6 @@
 # 第三方组件与来源
 
-星河音乐项目仓库：[liangle902/CarMusic](https://github.com/liangle902/CarMusic)（私有）。本文件与源码、构建脚本和许可证一起交付，记录当前构建的第三方来源。
+星河音乐项目仓库：[liangle902/CarMusic](https://github.com/liangle902/CarMusic)。本文件与源码、构建脚本和许可证一起交付，记录当前构建的第三方来源。
 
 | 组件 | 来源 | 说明 |
 | --- | --- | --- |
