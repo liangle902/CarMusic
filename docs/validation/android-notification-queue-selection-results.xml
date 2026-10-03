@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="com.carmusic.app.PlaylistQueueSelectionTest" tests="2" failures="0" errors="0" skipped="0" time="12.428" timestamp="2026-10-02T13:24:46" hostname="localhost">
+  <properties>
+    <property name="device" value="Redmi K20 Pro - 14" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="playlistReplacesQueueAndSelectedSongMovesFirstWithoutLosingOthers" classname="com.carmusic.app.PlaylistQueueSelectionTest" time="6.552" />
+  <testcase name="notificationControlsLyricsAndOptionalForegroundCardWork" classname="com.carmusic.app.PlaybackNotificationTest" time="3.505" />
+</testsuite>

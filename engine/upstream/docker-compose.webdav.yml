@@ -1,0 +1,12 @@
+services:
+  webdav:
+    image: nginx:alpine
+    container_name: musicdl-webdav-test
+    restart: unless-stopped
+    ports:
+      - "18081:80"
+    volumes:
+      - ./docker/webdav/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/webdav/.htpasswd:/etc/nginx/.htpasswd:ro
+      - ./data/webdav:/data
+    command: ["nginx", "-g", "daemon off;"]

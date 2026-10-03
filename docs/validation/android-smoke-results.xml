@@ -1,0 +1,21 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="com.carmusic.app.BulkCollectionTest" tests="13" failures="0" errors="0" skipped="0" time="97.739" timestamp="2026-10-02T10:54:02" hostname="localhost">
+  <properties>
+    <property name="device" value="Redmi K20 Pro - 14" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="bulkAddAndRemovePreserveFavoritesAndPlaybackQueue" classname="com.carmusic.app.BulkCollectionTest" time="6.587" />
+  <testcase name="liveUpstreamSessionsProduceScannableBitmaps" classname="com.carmusic.app.LoginQrTest" time="2.761" />
+  <testcase name="clickingLyricsSeeksToTheirTimestamp" classname="com.carmusic.app.NativeNavigationTest" time="4.64" />
+  <testcase name="homeNavigationThemesAndSidebarWork" classname="com.carmusic.app.NativeNavigationTest" time="2.77" />
+  <testcase name="queueOperationsPreserveLibraryAndProgress" classname="com.carmusic.app.NativeNavigationTest" time="2.077" />
+  <testcase name="freshSearchAndFailedSourceAutoSwitchPlayWithRealLyrics" classname="com.carmusic.app.OnlinePlaybackTest" time="6.191" />
+  <testcase name="retriesTransientHttpErrorsAndBoundsFailedQueueTraversal" classname="com.carmusic.app.PlaybackNetworkTest" time="15.05" />
+  <testcase name="everyReportedQueueTrackPlaysAndLoadsMatchingLyrics" classname="com.carmusic.app.QueueSourceAuditTest" time="29.246" />
+  <testcase name="contentUrisImportExportAndRejectEmptyOrOversizedLyrics" classname="com.carmusic.app.VideoAssetsTest" time="0.412" />
+  <testcase name="stalledNetworkCancellationClosesConnectionAndRemovesPartialAsset" classname="com.carmusic.app.VideoAssetsTest" time="0.06" />
+  <testcase name="systemDocumentPickerImportsAudioCoverAndLyrics" classname="com.carmusic.app.VideoDocumentFlowTest" time="13.696" />
+  <testcase name="previewRespectsBackgroundAndLyricsAndDownsamplesLargeImages" classname="com.carmusic.app.VideoRendererTest" time="0.058" />
+  <testcase name="rendersCoverBackgroundLyricsAndPlayableAudioVideo" classname="com.carmusic.app.VideoRendererTest" time="4.651" />
+</testsuite>

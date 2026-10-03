@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>星河音乐</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <aside class="review-rail">
+    <div class="rail-heading"><a class="studio-brand" href="#home"><img class="brand-logo" src="assets/logo.svg" alt="星河音乐标志"><span class="brand-copy">星河音乐<small>音乐随行</small></span></a><button id="rail-toggle" class="rail-toggle" aria-label="收起侧边栏" aria-expanded="true" title="收起侧边栏"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button></div>
+    <p class="rail-label">页面预览</p>
+    <nav id="review-nav" aria-label="设计页面"></nav>
+    <div class="rail-bottom"><div class="review-tools"><button id="theme-preview" title="切换日间">切换日间</button><button id="actual-preview" title="铺满窗口">铺满窗口</button><button id="replay-splash" title="重播开屏">重播开屏</button></div><a href="design-guide.html" class="guide-link" title="功能说明">功能说明 ↗</a><small>静态预览</small></div>
+  </aside>
+  <main class="stage">
+    <div class="stage-caption"><span>星河音乐</span><span id="page-caption">首页</span></div>
+    <div class="device" id="device">
+      <header class="status-bar"><span>09:41</span><a class="status-brand" href="#home"><img src="assets/logo.svg" alt=""><span>星河音乐</span></a><span class="status-spacer" aria-hidden="true"></span></header>
+      <div id="screen"></div>
+      <div id="mini-player"></div>
+      <div id="overlay-root"></div>
+      <div id="toast" role="status" aria-live="polite"></div>
+    </div>
+  </main>
+  <div id="splash-root"></div>
+  <script src="video.js"></script>
+  <script src="app.js"></script>
+  <script src="splash.js"></script>
+</body>
+</html>

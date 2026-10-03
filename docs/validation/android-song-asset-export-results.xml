@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="com.carmusic.app.VideoAssetsTest" tests="3" failures="0" errors="0" skipped="0" time="2.282" timestamp="2026-10-02T13:39:13" hostname="localhost">
+  <properties>
+    <property name="device" value="Redmi K20 Pro - 14" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="songCoverExportsAsRealJpegAndLocalLyricsExportTheirContent" classname="com.carmusic.app.VideoAssetsTest" time="0.562" />
+  <testcase name="contentUrisImportExportAndRejectEmptyOrOversizedLyrics" classname="com.carmusic.app.VideoAssetsTest" time="0.341" />
+  <testcase name="stalledNetworkCancellationClosesConnectionAndRemovesPartialAsset" classname="com.carmusic.app.VideoAssetsTest" time="0.032" />
+</testsuite>

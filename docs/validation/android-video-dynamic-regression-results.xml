@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="com.carmusic.app.VideoVisualTest" tests="3" failures="0" errors="0" skipped="0" time="33.307" timestamp="2026-10-02T13:44:21" hostname="localhost">
+  <properties>
+    <property name="device" value="Redmi K20 Pro - 14" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="visualLoopsAndCoverAndBackgroundAreEncodedWithSelectedAudio" classname="com.carmusic.app.VideoVisualTest" time="25.432" />
+  <testcase name="previewRespectsBackgroundAndLyricsAndDownsamplesLargeImages" classname="com.carmusic.app.VideoRendererTest" time="0.133" />
+  <testcase name="rendersCoverBackgroundLyricsAndPlayableAudioVideo" classname="com.carmusic.app.VideoRendererTest" time="6.339" />
+</testsuite>
