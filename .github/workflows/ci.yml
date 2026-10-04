@@ -34,4 +34,4 @@ jobs:
           cache-dependency-path: engine/upstream/go.sum
       - run: GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -buildvcs=false -trimpath -ldflags='-s -w' -o ../../app/src/main/jniLibs/arm64-v8a/libcarmusic.so ./cmd/carmusic
         working-directory: engine/upstream
-      - run: chmod +x gradlew && ./gradlew :app:testReleaseUnitTest :app:lintRelease :app:assembleRelease --console=plain
+      - run: java -cp gradle/wrapper/gradle-wrapper.jar org.gradle.wrapper.GradleWrapperMain :app:testReleaseUnitTest :app:lintRelease :app:assembleRelease --console=plain
