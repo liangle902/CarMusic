@@ -14,3 +14,5 @@
 | Reorderable 2.2.0 | https://github.com/Calvin-LL/Reorderable/tree/v2.2.0 | `sh.calvin.reorderable:reorderable`；队列拖动跟手、实时让位和边缘滚动；Apache 2.0。与当前 Compose 1.6.6 配套使用。 |
 
 正式发布附件与对应版本的源码共同交付。保留上游许可证和组件来源。
+
+FFmpeg 配置、许可证与对应源码交付状态见 [FFMPEG_SOURCE.md](FFMPEG_SOURCE.md)。随包包含 GPL v3 原文；镜像自定义程序的完整对应源码仍需补齐，不能仅凭源码仓库链接认定分发材料完整。

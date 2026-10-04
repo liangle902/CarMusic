@@ -394,6 +394,7 @@ type StartOptions struct {
 	ListenHost        string
 	BasePath          string
 	InstanceID        string
+	LocalToken        string
 	OnListen          func(net.Addr) error
 }
 
@@ -425,6 +426,9 @@ func StartWithOptions(port string, opts StartOptions) {
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
+	if opts.LocalToken != "" {
+		r.Use(localTokenRequired(opts.LocalToken, RoutePrefix+"/healthz"))
+	}
 	r.Use(corsMiddleware())
 
 	tmpl := template.Must(template.New("").Funcs(template.FuncMap{
@@ -517,8 +521,10 @@ func StartWithOptions(port string, opts StartOptions) {
 	configAPI.POST("/cookies", func(c *gin.Context) {
 		var req map[string]string
 		if err := c.ShouldBindJSON(&req); err == nil {
-			core.CM.SetAll(req)
-			core.CM.Save()
+			if err := core.CM.UpdateAndSave(req); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "账号凭据保存失败，请重试"})
+				return
+			}
 			c.JSON(200, gin.H{"status": "ok"})
 			return
 		}

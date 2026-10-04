@@ -85,8 +85,10 @@ func RegisterQRLoginRoutes(api *gin.RouterGroup) {
 			if cookie != "" {
 				cookieSource := qrLoginCookieSource(source)
 				result.Cookie = cookie
-				core.CM.SetAll(map[string]string{cookieSource: cookie})
-				core.CM.Save()
+				if err := core.CM.UpdateAndSave(map[string]string{cookieSource: cookie}); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "账号凭据保存失败，请重试登录状态检查"})
+					return
+				}
 				if result.Extra == nil {
 					result.Extra = make(map[string]string)
 				}

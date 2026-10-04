@@ -33,16 +33,41 @@ fun ImportPlaylistButton(item:PlaylistItem,album:Boolean=false) {
 }
 
 @Composable
-fun CollectionPicker(song:SongItem,onClose:()->Unit,onMessage:(String)->Unit) {
-    CollectionPicker(listOf(song),onClose,onMessage)
+fun CollectionPicker(song:SongItem,onClose:()->Unit,onMessage:(String)->Unit,addToPlaying:((List<SongItem>)->Int)?=null) {
+    CollectionPicker(listOf(song),onClose,onMessage,addToPlaying)
 }
 
 @Composable
-fun CollectionPicker(songs:List<SongItem>,onClose:()->Unit,onMessage:(String)->Unit) {
+fun CollectionPicker(songs:List<SongItem>,onClose:()->Unit,onMessage:(String)->Unit,addToPlaying:((List<SongItem>)->Int)?=null) {
     var items by remember {mutableStateOf<List<LocalCollection>>(emptyList())};var error by remember {mutableStateOf<String?>(null)};val scope=rememberCoroutineScope()
-    LaunchedEffect(Unit){try {items=collections().filter {it.kind!="imported"}} catch(e:CancellationException){throw e} catch(e:Exception){error=e.message}}
+    var loading by remember {mutableStateOf(true)}
+    LaunchedEffect(Unit){try {items=collections().filter {it.kind!="imported"}} catch(e:CancellationException){throw e} catch(e:Exception){error=e.message} finally {loading=false}}
     var busy by remember {mutableStateOf(false)}
-    AlertDialog(onDismissRequest={if(!busy) onClose()},title={Text("加入本地歌单 · ${songs.size} 首")},text={Column(Modifier.heightIn(max=musicDialogContentHeight(350.dp)).verticalScroll(rememberScrollState())) {error?.let {Text(it)};if(items.isEmpty()) Text("请先创建一个本地歌单");items.forEach {item->TextButton(enabled=!busy,onClick={scope.launch {busy=true;try {for(song in songs.distinctBy {it.key}) ApiClient.json("/collections/${item.id}/songs",method="POST",body=ApiClient.gson.toJsonTree(song));onMessage("已加入 ${item.name}");onClose()} catch(e:CancellationException){throw e} catch(e:Exception){error=e.message} finally {busy=false}}}){Text(item.name)}}}},confirmButton={TextButton(onClick=onClose,enabled=!busy){Text("关闭")}})
+    AlertDialog(
+        onDismissRequest={if(!busy) onClose()},
+        title={Text("加入${if(addToPlaying!=null) "歌单" else "本地歌单"} · ${songs.size} 首")},
+        text={Column(Modifier.heightIn(max=musicDialogContentHeight(350.dp)).verticalScroll(rememberScrollState())) {
+            addToPlaying?.let { append ->
+                TextButton(enabled=!busy&&songs.isNotEmpty(),modifier=Modifier.fillMaxWidth(),onClick={
+                    val added=append(songs)
+                    onMessage(if(added>0) "已加入正在播放列表 · $added 首" else "所选歌曲已在正在播放列表中")
+                    onClose()
+                }) {
+                    Row(Modifier.fillMaxWidth(),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
+                        MusicIcon("播放队列")
+                        Spacer(Modifier.width(12.dp))
+                        Text("正在播放列表")
+                    }
+                }
+                HorizontalDivider(Modifier.padding(vertical=8.dp))
+            }
+            error?.let {Text(it,color=MaterialTheme.colorScheme.error)}
+            if(loading) Text("正在加载本地歌单…")
+            else if(items.isEmpty()&&error==null) Text(if(addToPlaying!=null) "暂无本地歌单" else "请先创建一个本地歌单")
+            items.forEach {item->TextButton(enabled=!busy,onClick={scope.launch {busy=true;try {for(song in songs.distinctBy {it.key}) ApiClient.json("/collections/${item.id}/songs",method="POST",body=ApiClient.gson.toJsonTree(song));onMessage("已加入 ${item.name}");onClose()} catch(e:CancellationException){throw e} catch(e:Exception){error=e.message} finally {busy=false}}}){Text(item.name)}}
+        }},
+        confirmButton={TextButton(onClick=onClose,enabled=!busy){Text("关闭")}}
+    )
 }
 
 @Composable

@@ -1,0 +1,37 @@
+name: Build and regression checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  engine:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: engine/upstream
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: engine/upstream/go.mod
+          cache-dependency-path: engine/upstream/go.sum
+      - run: go test ./core ./internal/web ./internal/appshell ./internal/cli ./cmd/music-dl -timeout 180s
+      - run: GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -buildvcs=false -trimpath -ldflags='-s -w' -o carmusic-arm64 ./cmd/carmusic
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager 'platforms;android-34' 'build-tools;34.0.0'
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: engine/upstream/go.mod
+          cache-dependency-path: engine/upstream/go.sum
+      - run: GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -buildvcs=false -trimpath -ldflags='-s -w' -o ../../app/src/main/jniLibs/arm64-v8a/libcarmusic.so ./cmd/carmusic
+        working-directory: engine/upstream
+      - run: chmod +x gradlew && ./gradlew :app:testReleaseUnitTest :app:lintRelease :app:assembleRelease --console=plain

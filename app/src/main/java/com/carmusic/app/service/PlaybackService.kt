@@ -17,7 +17,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
@@ -45,10 +45,19 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import androidx.media3.datasource.DataSourceBitmapLoader
 import java.io.File
 
 @OptIn(UnstableApi::class)
 class PlaybackService : MediaSessionService() {
+    companion object {
+        private const val LOCAL_ACTION = "com.carmusic.app.BIND_PLAYBACK"
+        private val bindingToken = java.util.UUID.randomUUID().toString()
+        fun localBindingIntent(context: android.content.Context) = Intent(context, PlaybackService::class.java)
+            .setAction(LOCAL_ACTION).putExtra("bindingToken", bindingToken)
+    }
+    val ready = MutableStateFlow(false)
 
     private val binder = LocalBinder()
     private var mediaSession: MediaSession? = null
@@ -72,17 +81,19 @@ class PlaybackService : MediaSessionService() {
     val isPlaying = MutableStateFlow(false)
     val currentPosition = MutableStateFlow(0L)
     val duration = MutableStateFlow(0L)
+    val audioBitrate = MutableStateFlow<Int?>(null)
     val playlist = MutableStateFlow<List<SongItem>>(emptyList())
     val playMode = MutableStateFlow(PlayMode.SEQUENCE)
     val isFavorite = MutableStateFlow(false)
 
     fun cacheBytes():Long = simpleCache?.cacheSpace ?: 0L
 
-    fun clearPlaybackCache() {
+    suspend fun clearPlaybackCache() {
         currentPosition.value=player.currentPosition.coerceAtLeast(0)
         player.pause()
         player.clearMediaItems()
-        simpleCache?.let {cache -> cache.keys.toList().forEach {cache.removeResource(it)}}
+        val cache = simpleCache
+        withContext(Dispatchers.IO) {cache?.keys?.toList()?.forEach {cache.removeResource(it)}}
         AppStore.saveSession(playlist.value,currentSong.value,currentPosition.value,playMode.value)
     }
 
@@ -91,7 +102,11 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onBind(intent: Intent?): IBinder? {
-        return if (intent?.action == MediaSessionService.SERVICE_INTERFACE || intent?.action == "android.media.browse.MediaBrowserService") super.onBind(intent) else binder
+        return when (intent?.action) {
+            LOCAL_ACTION -> if (intent.getStringExtra("bindingToken") == bindingToken) binder else null
+            MediaSessionService.SERVICE_INTERFACE, "android.media.browse.MediaBrowserService" -> super.onBind(intent)
+            else -> null
+        }
     }
 
     override fun onCreate() {
@@ -101,20 +116,30 @@ class PlaybackService : MediaSessionService() {
         })
         initializePlayer()
         initializeMediaSession()
-        startProgressTracking()
-        serviceScope.launch { try {ApiClient.settings()} catch(e:CancellationException){throw e} catch(_:Exception){} }
-        playlist.value = AppStore.restoredQueue()
-        currentSong.value = AppStore.restoredSong() ?: playlist.value.firstOrNull()
-        duration.value = (currentSong.value?.duration ?: 0L) * 1000
-        currentPosition.value = AppStore.restoredPosition()
-        playMode.value = AppStore.restoredMode()
-        serviceScope.launch { AppStore.favorites.collect { isFavorite.value = currentSong.value?.let(AppStore::isFavorite) ?: false } }
-        serviceScope.launch {kotlinx.coroutines.flow.combine(AppStore.notificationControls,AppStore.appVisible){enabled,visible->enabled to visible}.collect {updateNotificationMetadata();mediaSession?.let {onUpdateNotification(it,player.isPlaying)}}}
-        if (AppStore.autoplay.value) currentSong.value?.let { loadSong(it, currentPosition.value) }
+        serviceScope.launch {
+            AppStore.initialize()
+            withContext(Dispatchers.IO) {
+                val queue = AppStore.restoredQueue()
+                val current = AppStore.restoredSong(queue) ?: queue.firstOrNull()
+                val position = AppStore.restoredPosition()
+                val mode = AppStore.restoredMode()
+                withContext(Dispatchers.Main) {
+                    playlist.value = queue; currentSong.value = current
+                    duration.value = (current?.duration ?: 0L) * 1000
+                    currentPosition.value = position; playMode.value = mode
+                }
+            }
+            ready.value = true
+            startProgressTracking()
+            launch { try {ApiClient.settings()} catch(e:CancellationException){throw e} catch(_:Exception){} }
+            launch { AppStore.favorites.collect { isFavorite.value = currentSong.value?.let(AppStore::isFavorite) ?: false } }
+            launch {kotlinx.coroutines.flow.combine(AppStore.notificationControls,AppStore.appVisible){enabled,visible->enabled to visible}.collect {updateNotificationMetadata();mediaSession?.let {onUpdateNotification(it,player.isPlaying)}}}
+            if (AppStore.autoplay.value) currentSong.value?.let { loadSong(it, currentPosition.value) }
+        }
     }
 
     override fun onUpdateNotification(session:MediaSession,startInForegroundRequired:Boolean) {
-        if(!AppStore.notificationControls.value&&AppStore.appVisible.value) {
+        if(ready.value && !AppStore.notificationControls.value&&AppStore.appVisible.value) {
             stopForeground(STOP_FOREGROUND_REMOVE)
             getSystemService(android.app.NotificationManager::class.java).cancel(DefaultMediaNotificationProvider.DEFAULT_NOTIFICATION_ID)
         } else super.onUpdateNotification(session,startInForegroundRequired)
@@ -137,10 +162,7 @@ class PlaybackService : MediaSessionService() {
         val databaseProvider = StandaloneDatabaseProvider(this)
         simpleCache = SimpleCache(cacheDir, evictor, databaseProvider)
 
-        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-            .setConnectTimeoutMs(8000)
-            .setReadTimeoutMs(15000)
-            .setAllowCrossProtocolRedirects(true)
+        val httpDataSourceFactory = OkHttpDataSource.Factory(ApiClient.httpClient)
 
         val upstreamFactory = DefaultDataSource.Factory(this, httpDataSourceFactory)
         val cacheDataSourceFactory = CacheDataSource.Factory()
@@ -163,9 +185,16 @@ class PlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .build()
         player.setPlaybackSpeed(1f)
-        AppStore.setPlaybackSpeed(1f)
 
         player.addListener(object : Player.Listener {
+            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+                audioBitrate.value=tracks.groups.firstNotNullOfOrNull { group ->
+                    if(group.type!=C.TRACK_TYPE_AUDIO) null else (0 until group.length).firstNotNullOfOrNull { index ->
+                        if(!group.isTrackSelected(index)) null else group.getTrackFormat(index).averageBitrate
+                            .takeIf {it>0}?.let {(it+500)/1000}
+                    }
+                }
+            }
             override fun onIsPlayingChanged(playing: Boolean) {
                 isPlaying.value = playing
                 if (!playing) { currentPosition.value = player.currentPosition; persistSession() }
@@ -240,6 +269,10 @@ class PlaybackService : MediaSessionService() {
         }
 
         val sessionCallback = object : MediaSession.Callback {
+            override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
+                if(controller.uid!=applicationInfo.uid && !controller.isTrusted) return MediaSession.ConnectionResult.reject()
+                return super.onConnect(session,controller)
+            }
             override fun onMediaButtonEvent(
                 session: MediaSession,
                 controllerInfo: MediaSession.ControllerInfo,
@@ -269,6 +302,8 @@ class PlaybackService : MediaSessionService() {
         }
 
         mediaSession = MediaSession.Builder(this, forwardingPlayer)
+            .setBitmapLoader(DataSourceBitmapLoader(DataSourceBitmapLoader.DEFAULT_EXECUTOR_SERVICE.get(),
+                DefaultDataSource.Factory(this, OkHttpDataSource.Factory(ApiClient.httpClient))))
             .setSessionActivity(sessionActivityPendingIntent)
             .setCallback(sessionCallback)
             .build()
@@ -292,7 +327,7 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
-    private fun persistSession() = AppStore.saveSession(playlist.value, currentSong.value, currentPosition.value, playMode.value)
+    private fun persistSession() { if (ready.value) AppStore.saveSession(playlist.value, currentSong.value, currentPosition.value, playMode.value) }
 
     fun playSong(song: SongItem) {
         failedTracks.clear()
@@ -315,6 +350,7 @@ class PlaybackService : MediaSessionService() {
         resolveJob = serviceScope.launch {
             player.pause()
             player.clearMediaItems()
+            audioBitrate.value = null
             currentSong.value = song
             currentPosition.value = resume
             duration.value = song.duration * 1000
@@ -348,10 +384,9 @@ class PlaybackService : MediaSessionService() {
             val streamUrl = direct ?: cachedUrl ?: info?.takeIf { it.valid }?.let { ApiClient.streamUrl(resolved) }
             if (streamUrl == null) { handleFailure("无法解析 ${song.name} 的音源"); return@launch }
             val metadata = MediaMetadata.Builder().setTitle(song.name).setArtist(song.artist).setAlbumTitle(song.album)
-                .apply { if (song.cover.isNotBlank()) setArtworkUri(Uri.parse(song.cover)) }.build()
+                .apply { if (song.cover.isNotBlank()) setArtworkUri(Uri.parse(ApiClient.coverUrl(song.source, song.cover))) }.build()
             player.setMediaItem(MediaItem.Builder().setUri(streamUrl).setMediaId(song.key).setMediaMetadata(metadata).build(), resume)
             updateNotificationMetadata()
-            persistSession()
             player.prepare()
             player.play()
             AppStore.recordRecent(song)
@@ -359,7 +394,6 @@ class PlaybackService : MediaSessionService() {
                 try { ApiClient.json("/local_music/auto_cache",method="POST",body=ApiClient.gson.toJsonTree(resolved)) }
                 catch(e: CancellationException) {throw e} catch(_: Exception) { }
             }
-            persistSession()
         }
     }
 
@@ -398,6 +432,16 @@ class PlaybackService : MediaSessionService() {
         if (next) list.add((list.indexOfFirst { it.key == currentSong.value?.key } + 1).coerceIn(0, list.size), song) else list.add(song)
         playlist.value = list
         persistSession()
+    }
+    fun addToQueue(songs: List<SongItem>): Int {
+        val currentQueue = playlist.value
+        val updatedQueue = com.carmusic.app.data.queueWithSongsAppended(currentQueue, songs)
+        val added = updatedQueue.size - currentQueue.size
+        if (added > 0) {
+            playlist.value = updatedQueue
+            persistSession()
+        }
+        return added
     }
     fun moveQueue(from: Int, to: Int) {
         val list = playlist.value.toMutableList()
@@ -444,11 +488,6 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
-    fun setPlaybackSpeed(speed:Float) {
-        require(speed in listOf(.5f,.75f,1f,1.25f,1.5f,1.75f,2f,2.25f,2.5f,2.75f,3f))
-        player.setPlaybackSpeed(speed)
-        AppStore.setPlaybackSpeed(speed)
-    }
     fun seekTo(positionMs: Long) {
         val target = positionMs.coerceIn(0, duration.value.coerceAtLeast(0))
         player.seekTo(target)
@@ -491,6 +530,15 @@ class PlaybackService : MediaSessionService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
         return mediaSession
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        persistSession()
+        if (!player.playWhenReady && resolveJob?.isActive != true) {
+            serviceScope.launch {
+                try { AppStore.flush() } finally { stopSelf() }
+            }
+        }
     }
 
     override fun onDestroy() {

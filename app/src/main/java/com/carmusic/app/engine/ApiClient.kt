@@ -22,10 +22,18 @@ import kotlin.coroutines.resumeWithException
 data class DownloadOutcome(val offlineUri:String?,val notice:String)
 
 object ApiClient {
-    private val client = OkHttpClient.Builder().connectTimeout(8, TimeUnit.SECONDS).readTimeout(40, TimeUnit.SECONDS).build()
+    // Runs for every network hop, including redirects. Only the current engine
+    // origin receives its token; external artwork/CDN hosts never receive it.
+    val httpClient: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(8, TimeUnit.SECONDS).readTimeout(40, TimeUnit.SECONDS)
+        .addNetworkInterceptor(EngineTokenInterceptor { url ->
+            if (url.scheme == "http") DaemonManager.authorizationFor(url.host, url.port) else null
+        }).build()
     val gson = Gson()
+    internal fun errorMessage(response: JsonObject): String = response.get("error")
+        ?.takeIf { it.isJsonPrimitive && !it.isJsonNull }?.asString.orEmpty()
     private suspend fun execute(request:Request,discardBody:Boolean=false):String = suspendCancellableCoroutine {continuation ->
-        val call=client.newCall(request)
+        val call=httpClient.newCall(request)
         continuation.invokeOnCancellation {call.cancel()}
         call.enqueue(object:okhttp3.Callback {
             override fun onFailure(call:okhttp3.Call,e:IOException) {if(continuation.isActive) continuation.resumeWithException(e)}
@@ -51,7 +59,7 @@ object ApiClient {
     suspend fun searchSongs(query: String, sources: String = ""): List<SongItem> {
         val response = json("/search",mapOf("q" to query,"sources" to sources,"format" to "json")).asJsonObject
         val songs = decodeSongs(response.get("songs"))
-        if (songs.isEmpty() && response.get("error")?.asString?.isNotBlank() == true) throw IOException(response.get("error").asString)
+        if (songs.isEmpty() && errorMessage(response).isNotBlank()) throw IOException(errorMessage(response))
         return songs
     }
     suspend fun inspectStream(song: SongItem): StreamInfo = gson.fromJson(json("/inspect",songParams(song)),StreamInfo::class.java)
@@ -104,12 +112,12 @@ object ApiClient {
     suspend fun playlists(source: String, personal: Boolean): Pair<List<PlaylistItem>,String> {
         val data = json(if (personal) "/user_playlists" else "/recommend",mapOf("sources" to source,"format" to "json")).asJsonObject
         val entries = data.get("playlists")
-        return (if (entries == null || entries.isJsonNull) emptyList() else gson.fromJson(entries,Array<PlaylistItem>::class.java).toList()) to (data.get("error")?.asString ?: "")
+        return (if (entries == null || entries.isJsonNull) emptyList() else gson.fromJson(entries,Array<PlaylistItem>::class.java).toList()) to errorMessage(data)
     }
     suspend fun playlistSongs(item: PlaylistItem, album: Boolean = false): List<SongItem> {
         val response = json(if (album) "/album" else "/playlist",mapOf("id" to item.id,"source" to item.source,"format" to "json")).asJsonObject
-        if (response.get("error")?.asString?.isNotBlank() == true) throw IOException(response.get("error").asString)
-        return decodeSongs(response.get("songs"))
+        if (errorMessage(response).isNotBlank()) throw IOException(errorMessage(response))
+        return decodeSongs(response.get("songs")).distinctBy { it.key }
     }
     suspend fun localSongs(): List<SongItem> {
         var result = json("/local_music",mapOf("refresh" to "1")).asJsonObject

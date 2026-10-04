@@ -77,6 +77,7 @@ var (
 	configDB      *gorm.DB
 	configInit    sync.Once
 	configInitErr error
+	configInitMu  sync.Mutex
 )
 
 func configDBPath() string {
@@ -91,9 +92,14 @@ func ConfigDBPath() string {
 	return configDBPath()
 }
 
+// ValidateConfigStorage lets the Android host fail closed on key/migration errors.
+func ValidateConfigStorage() error { return ensureConfigDB() }
+
 // CloseConfigDB closes the shared settings database connection. Tests and
 // graceful shutdown use this to release the SQLite file handle.
 func CloseConfigDB() error {
+	configInitMu.Lock()
+	defer configInitMu.Unlock()
 	if configDB == nil {
 		return nil
 	}
@@ -116,6 +122,12 @@ func legacyCookieFilePath() string {
 }
 
 func ensureConfigDB() error {
+	configInitMu.Lock()
+	defer configInitMu.Unlock()
+	if configInitErr != nil {
+		configInit = sync.Once{}
+		configInitErr = nil
+	}
 	configInit.Do(func() {
 		dbPath := filepath.Clean(ConfigDBPath())
 		if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
@@ -128,6 +140,14 @@ func ensureConfigDB() error {
 			configInitErr = err
 			return
 		}
+		defer func() {
+			if configInitErr != nil {
+				if sqlDB, closeErr := db.DB(); closeErr == nil {
+					_ = sqlDB.Close()
+				}
+				configDB = nil
+			}
+		}()
 
 		if err := db.AutoMigrate(&configKV{}, &cookieEntry{}, &DownloadRecord{}); err != nil {
 			configInitErr = err
@@ -136,6 +156,9 @@ func ensureConfigDB() error {
 
 		configDB = db
 		configInitErr = migrateLegacyCookies()
+		if configInitErr == nil {
+			configInitErr = encryptExistingConfig(db)
+		}
 	})
 
 	return configInitErr

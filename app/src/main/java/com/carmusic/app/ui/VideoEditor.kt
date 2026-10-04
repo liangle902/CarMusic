@@ -82,7 +82,10 @@ fun VideoEditor(song: SongItem?,service:com.carmusic.app.service.PlaybackService
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
         OutlinedTextField(title,{title=it},Modifier.fillMaxWidth(),label={Text("视频标题")},enabled=job?.isActive!=true)
         Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){listOf("9:16","1:1","3:4","16:9").forEach {ratio->FilterChip(selected=options.ratio==ratio,onClick={options=options.copy(ratio=ratio)},enabled=job?.isActive!=true,label={Text(ratio)})}}
-        val lines=remember(lyric){com.carmusic.app.engine.parseTimedLyrics(lyric)}
+        val lines by produceState(emptyList<com.carmusic.app.ui.model.LyricLine>(), lyric) {
+            kotlinx.coroutines.delay(250)
+            value = withContext(Dispatchers.Default) { com.carmusic.app.engine.parseTimedLyrics(lyric) }
+        }
         val currentLine=lines.lastOrNull {it.timeMs<=previewPosition}
         val preview=remember(cover,background,previewCover,previewBackground,lyric,title,options,previewPosition,previewSpectrum) {Bitmap.createBitmap(360,options.height*360/options.width,Bitmap.Config.ARGB_8888).also {drawVideoFrame(it,previewCover?:cover,previewBackground?:background,currentLine?.text?:if(lines.isEmpty()) lyric.lineSequence().firstOrNull().orEmpty() else "",title,options,previewPosition,currentLine,previewSpectrum)}}
         DisposableEffect(preview){onDispose {preview.recycle()}}

@@ -174,6 +174,7 @@ private fun MusicPageHeader(title: String, slogan: String? = null, showBrand: Bo
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SongList(songs: List<SongItem>, service: PlaybackService, empty: String = "暂无歌曲", remove: ((SongItem)->Unit)? = null,batchRemove:((List<SongItem>)->Unit)?=null,removeLabel:String="从歌单移除",header:(@Composable ()->Unit)?=null,actions:(@Composable ()->Unit)?=null) {
+    val uniqueSongs = remember(songs) { songs.distinctBy { it.key } }
     val favorites by AppStore.favorites.collectAsState()
     val scope = rememberCoroutineScope()
     var message by remember { mutableStateOf<String?>(null) }
@@ -186,7 +187,7 @@ private fun SongList(songs: List<SongItem>, service: PlaybackService, empty: Str
     var batchAdding by remember {mutableStateOf(false)}
     var batchJob by remember {mutableStateOf<Job?>(null)}
     val checks by AppStore.playbackChecks.collectAsState()
-    val selectedSongs=songs.filter {it.key in selectedKeys}
+    val selectedSongs=uniqueSongs.filter {it.key in selectedKeys}
     LazyColumn(Modifier.fillMaxSize()) {
         header?.let {item(key="playlist-header") {Column(Modifier.fillMaxWidth()) {it()}}}
         if(songs.isNotEmpty()) item {
@@ -196,9 +197,9 @@ private fun SongList(songs: List<SongItem>, service: PlaybackService, empty: Str
             }
             if(batch) {
                 FlowRow(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-                    TextButton(onClick={selectedKeys=if(selectedSongs.size==songs.size) emptySet() else songs.map {it.key}.toSet()}){Text("全选 / 取消")}
+                    TextButton(onClick={selectedKeys=if(selectedSongs.size==uniqueSongs.size) emptySet() else uniqueSongs.map {it.key}.toSet()}){Text("全选 / 取消")}
                     TextButton(onClick={selectedKeys=songs.filter {checks[it.key] in listOf("音源失效","当前源失效","未找到可用音源")}.map {it.key}.toSet()}){Text("选择失效音源")}
-                    TextButton(onClick={batchAdding=true},enabled=selectedSongs.isNotEmpty()){Text("加入本地歌单")}
+                    TextButton(onClick={batchAdding=true},enabled=selectedSongs.isNotEmpty()){Text("加入歌单")}
                     if(batchRemove!=null) TextButton(onClick={batchRemove(selectedSongs)},enabled=selectedSongs.isNotEmpty()){Text(removeLabel)}
                     TextButton(enabled=selectedSongs.any {it.source!="local"}&&batchJob?.isActive!=true,onClick={val targets=selectedSongs.filter {it.source!="local"};batchJob=scope.launch {
                         val links=mutableListOf<String>();val failures=mutableListOf<String>()
@@ -214,7 +215,7 @@ private fun SongList(songs: List<SongItem>, service: PlaybackService, empty: Str
         }
         message?.let { item {Text(it,Modifier.padding(vertical=12.dp))} }
         if (songs.isEmpty()) item { Text(empty, Modifier.padding(vertical = 30.dp)) }
-        items(songs, key = { it.key }) { song ->
+        items(uniqueSongs, key = { "song:${it.key}" }) { song ->
             var menu by remember { mutableStateOf(false) }
             val compact = LocalMusicWindow.current.compactHeight
             Row(Modifier.fillMaxWidth().padding(vertical = if(compact) 6.dp else 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -226,7 +227,7 @@ private fun SongList(songs: List<SongItem>, service: PlaybackService, empty: Str
                 Box { TextButton(onClick = {menu=true},modifier=Modifier.semantics {contentDescription="歌曲操作 ${song.name}"}) {Text("⋮")}; DropdownMenu(menu,{menu=false}) {
                     DropdownMenuItem(text={Text("下一首播放")},onClick={service.addToQueue(song,true);menu=false})
                     DropdownMenuItem(text={Text("加入播放队列")},onClick={service.addToQueue(song);menu=false})
-                    DropdownMenuItem(text={Text("加入本地歌单")},onClick={adding=song;menu=false})
+                    DropdownMenuItem(text={Text("加入歌单")},onClick={adding=song;menu=false})
                     if(song.source!="local") DropdownMenuItem(text={Text("切换音源")},onClick={switching=song;menu=false})
                     DropdownMenuItem(text={Text("导出歌词")},onClick={exporting=song to false;menu=false})
                     if(song.cover.isNotBlank()) DropdownMenuItem(text={Text("导出封面")},onClick={exporting=song to true;menu=false})
@@ -238,10 +239,10 @@ private fun SongList(songs: List<SongItem>, service: PlaybackService, empty: Str
             HorizontalDivider()
         }
     }
-    adding?.let { CollectionPicker(it,{adding=null},{message=it}) }
+    adding?.let { CollectionPicker(it,{adding=null},{message=it},addToPlaying={service.addToQueue(it)}) }
     switching?.let { SourcePicker(it,service,{switching=null}) }
     exporting?.let {(song,cover)->SongAssetExport(song,cover,{exporting=null},{message=it})}
-    if(batchAdding) CollectionPicker(selectedSongs,{batchAdding=false},{message=it})
+    if(batchAdding) CollectionPicker(selectedSongs,{batchAdding=false},{message=it},addToPlaying={service.addToQueue(it)})
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -257,10 +258,15 @@ private fun NativeSearch(service: PlaybackService) {
     var draftSources by remember {mutableStateOf(selected)}
     val scope = rememberCoroutineScope()
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
+    val requests = remember { LatestRequest() }
+    var searchJob by remember { mutableStateOf<Job?>(null) }
     val eligible by remember {derivedStateOf {sources.filter {it.search&&when(kind){"playlist"->it.playlist;"album"->it.album;else->true}}}}
     val canSearch by remember {derivedStateOf {query.isNotBlank() && eligible.any {it.id in selected} && !busy}}
     LaunchedEffect(Unit){try {sources=ApiClient.sources()} catch(e:CancellationException){throw e} catch(e:Exception){error=e.message}}
-    val search: () -> Unit = { scope.launch {
+    val search: () -> Unit = {
+        val request = requests.begin()
+        searchJob?.cancel()
+        searchJob = scope.launch {
             busy=true;error=null;opened=null
             try {
                 val requestedKind=kind;val requestedQuery=query.trim()
@@ -271,20 +277,30 @@ private fun NativeSearch(service: PlaybackService) {
                     try {val response=ApiClient.json("/search",mapOf("q" to requestedQuery,"type" to requestedKind,"sources" to id,"format" to "json")).asJsonObject
                         val found=ApiClient.decodeSongs(response.get("songs"));val entries=response.get("playlists");val lists=if(entries==null||entries.isJsonNull) emptyList() else ApiClient.gson.fromJson(entries,Array<PlaylistItem>::class.java).toList()
                         val reason=response.get("error")?.takeUnless {it.isJsonNull}?.asString.orEmpty()
-                        sourceResults=sourceResults+(id to if(reason.isNotBlank()) "搜索失败：$reason" else "搜索可用 · ${found.size+lists.size} 条结果")
+                        if(requests.isCurrent(request)) sourceResults=sourceResults+(id to if(reason.isNotBlank()) "搜索失败：$reason" else "搜索可用 · ${found.size+lists.size} 条结果")
                         found to lists
-                    } catch(e:CancellationException){throw e} catch(e:Exception){sourceResults=sourceResults+(id to "搜索失败：${e.message}");emptyList<SongItem>() to emptyList<PlaylistItem>()}
+                    } catch(e:CancellationException){throw e} catch(e:Exception){if(requests.isCurrent(request)) sourceResults=sourceResults+(id to "搜索失败：${e.message}");emptyList<SongItem>() to emptyList<PlaylistItem>()}
                 }}.awaitAll()}
-                songs=responses.flatMap {it.first}.distinctBy {it.key};groups=responses.flatMap {it.second}.distinctBy {it.source+":"+it.id};resultKind=requestedKind
-            } catch(e: CancellationException) {throw e} catch(e:Exception) {error=e.message} finally {busy=false}
+                if(requests.isCurrent(request)) {songs=responses.flatMap {it.first}.distinctBy {it.key};groups=responses.flatMap {it.second}.distinctBy {it.source+":"+it.id};resultKind=requestedKind}
+            } catch(e: CancellationException) {throw e} catch(e:Exception) {if(requests.isCurrent(request)) error=e.message} finally {if(requests.isCurrent(request)) busy=false}
         } }
+    val updateQuery: (String) -> Unit = { value ->
+        val cleared = query.isNotEmpty() && value.isEmpty()
+        query = value
+        if(cleared) {
+            requests.begin(); searchJob?.cancel(); searchJob=null
+            songs=emptyList();groups=emptyList();previousGroups=emptyList();opened=null
+            sourceResults=emptyMap();error=null;busy=false;kind="song";resultKind="song"
+            sourceDetails=false;sourcePicker=false
+        }
+    }
     val searchEntry = remember { movableContentOf {
         val horizontal=LocalMusicWindow.current.horizontal
         Row(if(horizontal) Modifier.widthIn(max=420.dp).fillMaxWidth().padding(start=20.dp) else Modifier.fillMaxWidth().padding(bottom=8.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
             Surface(Modifier.weight(1f),color=MaterialTheme.colorScheme.surfaceVariant,shape=RoundedCornerShape(24.dp)) {
                 Row(Modifier.height(48.dp).padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(10.dp)) {
                     MusicIcon("全网搜索",Modifier.size(20.dp),MaterialTheme.colorScheme.onSurfaceVariant)
-                    androidx.compose.foundation.text.BasicTextField(query,{query=it},Modifier.weight(1f),singleLine=true,
+                    androidx.compose.foundation.text.BasicTextField(query,updateQuery,Modifier.weight(1f),singleLine=true,
                         textStyle=androidx.compose.ui.text.TextStyle(color=MaterialTheme.colorScheme.onSurface,fontSize=14.sp),
                         keyboardOptions=androidx.compose.foundation.text.KeyboardOptions(imeAction=androidx.compose.ui.text.input.ImeAction.Search),
                         keyboardActions=androidx.compose.foundation.text.KeyboardActions(onSearch={if(canSearch){focus.clearFocus();search()}}),
@@ -300,8 +316,8 @@ private fun NativeSearch(service: PlaybackService) {
             if(sourceResults.isNotEmpty()) TextButton(onClick={sourceDetails=true},modifier=Modifier.heightIn(min=48.dp)){Text("${sourceResults.count {it.value.startsWith("搜索可用")}} / ${sourceResults.size} 可用",fontSize=11.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)}
     } }
     val results = remember { movableContentOf {
-        if(groups.isEmpty()) SongList(songs,service,if(sourceResults.isEmpty()) "输入歌名、歌手或分享链接开始搜索" else if(busy) "正在搜索…" else "暂无结果，换个关键词或平台试试",actions={filterButtons()})
-        else LazyColumn {items(groups,key={it.source+":"+it.id}) {item->Card(onClick={scope.launch {busy=true;try {songs=ApiClient.playlistSongs(item,resultKind=="album");previousGroups=groups;opened=item;groups=emptyList()} catch(e:CancellationException){throw e} catch(e:Exception){error=e.message} finally {busy=false}}},modifier=Modifier.fillMaxWidth().padding(vertical=6.dp)){Row(Modifier.padding(16.dp)){AsyncImage(ApiClient.coverUrl(item.source,item.cover),"封面",Modifier.size(58.dp));Column(Modifier.padding(start=12.dp)){Text(item.name);Text(item.creator,fontSize=12.sp)}}}}}    } }
+        if(groups.isEmpty()) key(query.isEmpty()) { SongList(songs,service,if(sourceResults.isEmpty()) "输入歌名、歌手或分享链接开始搜索" else if(busy) "正在搜索…" else "暂无结果，换个关键词或平台试试") }
+        else LazyColumn {items(groups,key={it.source+":"+it.id}) {item->Card(onClick={val request=requests.begin();searchJob?.cancel();searchJob=scope.launch {busy=true;try {val found=ApiClient.playlistSongs(item,resultKind=="album");if(requests.isCurrent(request)){songs=found;previousGroups=groups;opened=item;groups=emptyList()}} catch(e:CancellationException){throw e} catch(e:Exception){if(requests.isCurrent(request)) error=e.message} finally {if(requests.isCurrent(request)) busy=false}}},modifier=Modifier.fillMaxWidth().padding(vertical=6.dp)){Row(Modifier.padding(16.dp)){AsyncImage(ApiClient.coverUrl(item.source,item.cover),"封面",Modifier.size(58.dp));Column(Modifier.padding(start=12.dp)){Text(item.name);Text(item.creator,fontSize=12.sp)}}}}}    } }
     Column(Modifier.fillMaxSize()) {
     if(LocalMusicWindow.current.horizontal) MusicPageHeader("全网搜索",showBrand=false) { Box(Modifier.weight(1f),contentAlignment=Alignment.CenterEnd) {searchEntry()} }
     Box(Modifier.weight(1f)) {
@@ -312,7 +328,7 @@ private fun NativeSearch(service: PlaybackService) {
             },actions={Button(onClick={service.replaceQueue(songs)},enabled=songs.isNotEmpty()){Text("播放全部")};ImportPlaylistButton(opened!!,resultKind=="album")})
         } else Column(Modifier.fillMaxSize()) {
             if(!LocalMusicWindow.current.horizontal) searchEntry()
-            if(groups.isNotEmpty()||songs.isEmpty()) FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)){filterButtons()}
+            FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)){filterButtons()}
             if(busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             error?.let {Text(it,color=MaterialTheme.colorScheme.error,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis)}
             Box(Modifier.weight(1f)) { results() }

@@ -75,14 +75,48 @@ func (m *CookieManager) Load() {
 	}
 }
 
-func (m *CookieManager) Save() {
+func (m *CookieManager) Save() error {
 	if err := ensureConfigDB(); err != nil {
-		return
+		return err
 	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return saveCookies(m.cookies)
+}
 
-	m.mu.RLock()
-	rows := make([]cookieEntry, 0, len(m.cookies))
+// Publish new credentials only after the complete database transaction succeeds.
+func (m *CookieManager) UpdateAndSave(updates map[string]string) error {
+	if err := ensureConfigDB(); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	next := make(map[string]string, len(m.cookies)+len(updates))
 	for source, value := range m.cookies {
+		next[source] = value
+	}
+	for source, value := range updates {
+		source = strings.TrimSpace(source)
+		value = strings.TrimSpace(value)
+		if source == "" {
+			continue
+		}
+		if value == "" {
+			delete(next, source)
+		} else {
+			next[source] = value
+		}
+	}
+	if err := saveCookies(next); err != nil {
+		return err
+	}
+	m.cookies = next
+	return nil
+}
+
+func saveCookies(cookies map[string]string) error {
+	rows := make([]cookieEntry, 0, len(cookies))
+	for source, value := range cookies {
 		source = strings.TrimSpace(source)
 		value = strings.TrimSpace(value)
 		if source == "" || value == "" {
@@ -90,9 +124,7 @@ func (m *CookieManager) Save() {
 		}
 		rows = append(rows, cookieEntry{Source: source, Value: value})
 	}
-	m.mu.RUnlock()
-
-	_ = configDB.Transaction(func(tx *gorm.DB) error {
+	return configDB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("1 = 1").Delete(&cookieEntry{}).Error; err != nil {
 			return err
 		}
@@ -101,8 +133,6 @@ func (m *CookieManager) Save() {
 		}
 		return tx.Create(&rows).Error
 	})
-	// 🌟 确保写入前目录存在
-	os.MkdirAll("data", 0755)
 }
 
 func (m *CookieManager) Get(source string) string {
@@ -1411,64 +1441,60 @@ func writeParallelRange(w io.Writer, urlStr string, source string, start int64, 
 	const chunkSize int64 = 256 * 1024
 	const maxConcurrentChunks = 16
 
-	jobs := buildRangeChunkJobs(start, end, firstChunkSize, chunkSize)
-
-	sem := make(chan struct{}, maxConcurrentChunks)
-	results := make(chan rangeChunkResult, len(jobs))
-
-	for _, job := range jobs {
-		job := job
-		go func() {
-			sem <- struct{}{}
-			chunk, chunkContentType, err := fetchRangeChunk(urlStr, source, job.start, job.end)
-			<-sem
-			results <- rangeChunkResult{index: job.index, data: chunk, contentType: chunkContentType, err: err}
-		}()
-	}
-
-	next := 0
-	pending := make(map[int]rangeChunkResult)
-	for next < len(jobs) {
-		result := <-results
-		if result.err != nil {
-			return result.err
-		}
-		pending[result.index] = result
-
-		for {
-			ready, ok := pending[next]
-			if !ok {
+	// Bound scheduled work and out-of-order buffers, not only active requests.
+	cursor := start
+	first := true
+	for {
+		jobs := make([]rangeChunkJob, 0, maxConcurrentChunks)
+		lastWindow := false
+		for len(jobs) < maxConcurrentChunks {
+			size := chunkSize
+			if first {
+				size = firstChunkSize
+				first = false
+			}
+			chunkEnd := cursor + min(size-1, end-cursor)
+			jobs = append(jobs, rangeChunkJob{index: len(jobs), start: cursor, end: chunkEnd})
+			if chunkEnd == end {
+				lastWindow = true
 				break
 			}
-			if _, err := w.Write(ready.data); err != nil {
-				return err
+			cursor = chunkEnd + 1
+		}
+		results := make(chan rangeChunkResult, len(jobs))
+		for _, job := range jobs {
+			go func(job rangeChunkJob) {
+				data, kind, err := fetchRangeChunk(urlStr, source, job.start, job.end)
+				results <- rangeChunkResult{index: job.index, data: data, contentType: kind, err: err}
+			}(job)
+		}
+		next := 0
+		pending := make(map[int]rangeChunkResult, len(jobs))
+		for next < len(jobs) {
+			result := <-results
+			if result.err != nil {
+				return result.err
 			}
-			if flusher, ok := w.(http.Flusher); ok {
-				flusher.Flush()
+			pending[result.index] = result
+			for {
+				ready, ok := pending[next]
+				if !ok {
+					break
+				}
+				if _, err := w.Write(ready.data); err != nil {
+					return err
+				}
+				if flusher, ok := w.(http.Flusher); ok {
+					flusher.Flush()
+				}
+				delete(pending, next)
+				next++
 			}
-			delete(pending, next)
-			next++
+		}
+		if lastWindow {
+			return nil
 		}
 	}
-
-	return nil
-}
-
-func buildRangeChunkJobs(start int64, end int64, firstChunkSize int64, chunkSize int64) []rangeChunkJob {
-	var jobs []rangeChunkJob
-	firstEnd := start + firstChunkSize - 1
-	if firstEnd > end {
-		firstEnd = end
-	}
-	jobs = append(jobs, rangeChunkJob{index: len(jobs), start: start, end: firstEnd})
-	for chunkStart := firstEnd + 1; chunkStart <= end; chunkStart += chunkSize {
-		chunkEnd := chunkStart + chunkSize - 1
-		if chunkEnd > end {
-			chunkEnd = end
-		}
-		jobs = append(jobs, rangeChunkJob{index: len(jobs), start: chunkStart, end: chunkEnd})
-	}
-	return jobs
 }
 
 func fetchRangeChunk(urlStr string, source string, start int64, end int64) ([]byte, string, error) {
@@ -1486,7 +1512,8 @@ func fetchRangeChunk(urlStr string, source string, start int64, end int64) ([]by
 			continue
 		}
 
-		data, readErr := io.ReadAll(resp.Body)
+		expected := end - start + 1
+		data, readErr := io.ReadAll(io.LimitReader(resp.Body, expected+1))
 		contentType := strings.TrimSpace(resp.Header.Get("Content-Type"))
 		if idx := strings.Index(contentType, ";"); idx >= 0 {
 			contentType = strings.TrimSpace(contentType[:idx])
@@ -1501,8 +1528,7 @@ func fetchRangeChunk(urlStr string, source string, start int64, end int64) ([]by
 			lastErr = readErr
 			continue
 		}
-		expected := int(end - start + 1)
-		if len(data) != expected {
+		if int64(len(data)) != expected {
 			lastErr = fmt.Errorf("range %d-%d returned %d bytes, want %d", start, end, len(data), expected)
 			continue
 		}

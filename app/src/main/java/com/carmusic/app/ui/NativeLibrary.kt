@@ -28,12 +28,16 @@ fun NativeLibrary(service:PlaybackService,favoritesOnly:Boolean,navigate:(String
     var selected by remember {mutableStateOf<PlaylistItem?>(null)};var songs by remember {mutableStateOf<List<SongItem>?>(null)}
     var busy by remember {mutableStateOf(false)};var error by remember {mutableStateOf("")};var categories by remember {mutableStateOf(false)};var sort by remember {mutableStateOf(false)}
     val favorites by AppStore.favorites.collectAsState();val scope=rememberCoroutineScope();val colors=MaterialTheme.colorScheme
-    suspend fun load(){busy=true;error="";try {
-        if(source=="local") {manual=ApiClient.gson.fromJson(ApiClient.json("/collections",mapOf("include_imported" to "1")),Array<LocalCollection>::class.java).toList()}
-        else {linked=ApiClient.json("/cookies").asJsonObject.get(source)?.asString?.isNotBlank()==true
-            val capability=capabilities.firstOrNull {it.id==source}
-            val personal=if(linked&&capability?.personal==true) ApiClient.playlists(source,true) else emptyList<PlaylistItem>() to ""
-            val discover=if(!favoritesOnly&&capability?.recommend==true) ApiClient.playlists(source,false) else emptyList<PlaylistItem>() to ""
+    val requests=remember { LatestRequest() }
+    suspend fun load(){val request=requests.begin();val requestedSource=source;fun current()=requests.isCurrent(request)&&source==requestedSource
+        busy=true;error="";try {
+        if(requestedSource=="local") {val found=ApiClient.gson.fromJson(ApiClient.json("/collections",mapOf("include_imported" to "1")),Array<LocalCollection>::class.java).toList();if(current()) manual=found}
+        else {val hasAccount=ApiClient.json("/cookies").asJsonObject.get(requestedSource)?.asString?.isNotBlank()==true
+            val capability=capabilities.firstOrNull {it.id==requestedSource}
+            val personal=if(hasAccount&&capability?.personal==true) ApiClient.playlists(requestedSource,true) else emptyList<PlaylistItem>() to ""
+            val discover=if(!favoritesOnly&&capability?.recommend==true) ApiClient.playlists(requestedSource,false) else emptyList<PlaylistItem>() to ""
+            if(!current()) return
+            linked=hasAccount
             if(personal.second.isBlank()||personal.first.isNotEmpty()) own=personal.first
             if(discover.second.isBlank()||discover.first.isNotEmpty()) recommended=discover.first
             mode=if(own.isNotEmpty()||favoritesOnly) "mine" else "recommended"
@@ -41,11 +45,29 @@ fun NativeLibrary(service:PlaybackService,favoritesOnly:Boolean,navigate:(String
             if(own.isNotEmpty()) AppStore.cachePlaylists("${source}_personal",own)
             if(recommended.isNotEmpty()) AppStore.cachePlaylists("${source}_recommended",recommended)
         }
-    } catch(e:CancellationException){throw e} catch(e:Exception){error=e.message?:"歌单加载失败"} finally {busy=false}}
+    } catch(e:CancellationException){throw e} catch(e:Exception){if(current()) error=e.message?:"歌单加载失败"} finally {if(current()) busy=false}}
     LaunchedEffect(Unit){try {capabilities=ApiClient.sources().filter {it.personal||(!favoritesOnly&&it.recommend)}} catch(e:CancellationException){throw e} catch(e:Exception){error=e.message?:"平台列表加载失败"}}
     LaunchedEffect(source,capabilities){songs=null;selected=null;categoryLists=null;own=AppStore.cachedPlaylists("${source}_personal");recommended=AppStore.cachedPlaylists("${source}_recommended");load()}
-    LaunchedEffect(source,mode){if(source=="local"&&mode=="recommended"){busy=true;try {val result=ApiClient.playlists("qq",false);recommended=result.first;error=result.second} catch(e:CancellationException){throw e} catch(e:Exception){error=e.message?:"推荐加载失败"} finally {busy=false}}}
-    fun open(item:PlaylistItem,localSongs:List<SongItem>?=null){scope.launch {busy=true;error="";try {songs=localSongs?:if(item.source=="local") ApiClient.decodeSongs(ApiClient.json("/collections/${item.id}/songs")) else ApiClient.playlistSongs(item);selected=item} catch(e:CancellationException){throw e} catch(e:Exception){error=e.message?:"歌单读取失败"} finally {busy=false}}}
+    LaunchedEffect(source,mode){
+        if(source=="local"&&mode=="recommended"){
+            val request=requests.begin()
+            fun current()=requests.isCurrent(request)&&source=="local"&&mode=="recommended"
+            busy=true
+            try {val result=ApiClient.playlists("qq",false);if(current()){recommended=result.first;error=result.second}}
+            catch(e:CancellationException){throw e} catch(e:Exception){if(current()) error=e.message?:"推荐加载失败"}
+            finally {if(requests.isCurrent(request)&&source=="local") busy=false}
+        }
+    }
+    fun open(item:PlaylistItem,localSongs:List<SongItem>?=null){
+        val request=requests.begin();val requestedSource=source
+        scope.launch {
+            fun current()=requests.isCurrent(request)&&source==requestedSource
+            busy=true;error=""
+            try {val found=localSongs?:if(item.source=="local") ApiClient.decodeSongs(ApiClient.json("/collections/${item.id}/songs")) else ApiClient.playlistSongs(item);if(current()){songs=found;selected=item}}
+            catch(e:CancellationException){throw e} catch(e:Exception){if(current()) error=e.message?:"歌单读取失败"}
+            finally {if(current()) busy=false}
+        }
+    }
     Column(Modifier.fillMaxSize()) {
         if(songs==null) {
         if(!LocalMusicWindow.current.horizontal && !LocalMusicWindow.current.compactHeight) Text(if(favoritesOnly) "喜欢的歌，都在这里" else "一张歌单，一份心情",fontSize=12.sp,color=colors.onSurfaceVariant,modifier=Modifier.padding(bottom=8.dp))

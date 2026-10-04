@@ -17,13 +17,13 @@ internal suspend fun pollQrLogin(
     while(now()<expiresAt) {
         pause(interval)
         if(now()>=expiresAt) break
-        try {
-            val result=read()
-            onResult(result)
-            if(result.get("status")?.asString in listOf("success","expired","failed")) return
-            val extra=result.getAsJsonObject("extra")
-            interval=if(extra?.get("rate_limited")?.asString=="true") 60000L else 3000L
-        } catch(e:CancellationException){throw e} catch(e:Exception){onError(e);interval=5000L}
+        val result=try {read()}
+            catch(e:CancellationException){throw e}
+            catch(e:Exception){onError(e);interval=5000L;continue}
+        onResult(result)
+        if(result.get("status")?.asString in listOf("success","expired","failed")) return
+        val extra=result.getAsJsonObject("extra")
+        interval=if(extra?.get("rate_limited")?.asString=="true") 60000L else 3000L
     }
     onResult(JsonObject().apply {addProperty("status","expired");addProperty("message","二维码已失效，请重新生成")})
 }

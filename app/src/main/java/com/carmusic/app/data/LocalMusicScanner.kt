@@ -45,6 +45,7 @@ internal object LocalMusicScanner {
         if (::context.isInitialized) return
         context = application.applicationContext
         scope.launch {
+            AppStore.initialize()
             for (manual in requests) {
                 if (!manual && !AppStore.autoScanLocal.value) continue
                 scanJob = launch { scan() }
@@ -52,6 +53,7 @@ internal object LocalMusicScanner {
             }
         }
         scope.launch {
+            AppStore.initialize()
             combine(AppStore.autoScanLocal, AppStore.appVisible) { auto, visible -> auto to visible }.collect { (auto, visible) ->
                 if (!auto) { debounceJob?.cancel(); scanJob?.cancel() }
                 else if (visible) requestScan()
@@ -214,7 +216,7 @@ internal object LocalMusicScanner {
                             songs += song
                             knownIds += song.id
                         } catch (e: CancellationException) { throw e }
-                        catch (e: SecurityException) { throw e }
+                        catch (_: SecurityException) { skipped++ }
                         catch (_: Exception) { skipped++ }
                         progress(songs.size)
                     }

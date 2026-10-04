@@ -17,7 +17,16 @@ fun NativeDownloadManager(service:PlaybackService,songList:@Composable (List<Son
     var tab by remember {mutableStateOf("已完成")};var songs by remember {mutableStateOf<List<SongItem>>(emptyList())}
     var data by remember {mutableStateOf<JsonObject?>(null)};var page by remember {mutableIntStateOf(1)};var error by remember {mutableStateOf("")};var busy by remember {mutableStateOf(false)};var clear by remember {mutableStateOf(false)}
     val scope=rememberCoroutineScope()
-    suspend fun load(){busy=true;error="";try {if(tab=="已完成") songs=ApiClient.localSongs() else data=ApiClient.json("/api/downloads/records",mapOf("page" to page.toString(),"page_size" to "20")).asJsonObject} catch(e:CancellationException){throw e} catch(e:Exception){error=e.message?:"下载记录加载失败"} finally {busy=false}}
+    val requests=remember { LatestRequest() }
+    suspend fun load(){
+        val request=requests.begin();val requestedTab=tab;val requestedPage=page
+        fun current()=requests.isCurrent(request)&&tab==requestedTab&&page==requestedPage
+        busy=true;error=""
+        try {
+            if(requestedTab=="已完成") {val found=ApiClient.localSongs();if(current()) songs=found}
+            else {val found=ApiClient.json("/api/downloads/records",mapOf("page" to requestedPage.toString(),"page_size" to "20")).asJsonObject;if(current()) data=found}
+        } catch(e:CancellationException){throw e} catch(e:Exception){if(current()) error=e.message?:"下载记录加载失败"} finally {if(current()) busy=false}
+    }
     LaunchedEffect(tab,page){load()}
     Column {
         Row {listOf("已完成","任务记录").forEach {label->FilterChip(tab==label,{tab=label;page=1},label={Text(label)},modifier=Modifier.padding(end=8.dp))};TextButton(onClick={scope.launch {load()}}){Text("刷新")}}

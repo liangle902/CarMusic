@@ -30,6 +30,19 @@ fun AccountSettings() {
     var generating by remember {mutableStateOf(false)}
     var sources by remember {mutableStateOf<List<com.carmusic.app.ui.model.SourceCapability>>(emptyList())}
     val scope = rememberCoroutineScope()
+    val qrRequests = remember { LatestRequest() }
+    fun generateQr(requested: String) {
+        val request=qrRequests.begin();session=null;generating=true;message="正在生成二维码…"
+        scope.launch {
+            fun current()=qrRequests.isCurrent(request)&&loginSource==requested
+            try {
+                val created=ApiClient.json("/qr_login/$requested",method="POST").asJsonObject
+                check(!created.get("key")?.takeUnless {it.isJsonNull}?.asString.isNullOrBlank()) {"平台没有返回登录会话，请重试"}
+                if(current()) {session=created;message=""}
+            } catch(e:CancellationException){throw e} catch(e:Exception){if(current()) message=e.message?:"生成失败"}
+            finally {if(qrRequests.isCurrent(request)) generating=false}
+        }
+    }
     var manual by remember(source) {mutableStateOf(false)}
     val supportsQr=sources.any {it.id==source&&it.qr}
     LaunchedEffect(Unit) {try {sources=ApiClient.sources()} catch(e:CancellationException){throw e} catch(e:Exception){message=e.message?:"无法加载平台列表"}}
@@ -41,7 +54,7 @@ fun AccountSettings() {
     if(manual||!supportsQr) OutlinedTextField(cookie,{cookie=it},Modifier.fillMaxWidth(),label={Text("Cookie")},visualTransformation=androidx.compose.ui.text.input.PasswordVisualTransformation())
     Row {
         if(manual||!supportsQr) TextButton(onClick={scope.launch {try {ApiClient.json("/cookies",method="POST",body=JsonObject().apply {addProperty(source,cookie)});cookie="";linked=true;message="账号凭据已保存"} catch(e:CancellationException){throw e} catch(e:Exception){message=e.message?:"保存失败"}}},enabled=cookie.isNotBlank()){Text("保存凭据")}
-        if(supportsQr) Button(onClick={scope.launch {generating=true;message="正在生成二维码…";val requested=loginSource;try {val created=ApiClient.json("/qr_login/$requested",method="POST").asJsonObject;check(!created.get("key")?.asString.isNullOrBlank()) {"平台没有返回登录会话，请重试"};if(loginSource==requested){session=created;message=""}} catch(e:CancellationException){throw e} catch(e:Exception){message=e.message?:"生成失败"} finally {generating=false}}},enabled=!generating){Text(if(generating) "生成中…" else "扫码关联")}
+        if(supportsQr) Button(onClick={generateQr(loginSource)},enabled=!generating){Text(if(generating) "生成中…" else "扫码关联")}
         TextButton(onClick={scope.launch {try {ApiClient.json("/cookies",method="POST",body=JsonObject().apply {addProperty(source,"")});linked=false;message="已解除关联"} catch(e:CancellationException){throw e} catch(e:Exception){message=e.message?:"解除失败"}}}){Text("解除关联")}
     }
     if(supportsQr) TextButton(onClick={manual=!manual}){Text(if(manual) "收起手动关联" else "手动关联（高级）")}
@@ -50,7 +63,7 @@ fun AccountSettings() {
         var status by remember(data) {mutableStateOf("请使用对应平台 App 扫码")}
         val image=data.get("image_url")?.takeUnless {it.isJsonNull}?.asString
         val bitmap=remember(data) {runCatching {decodeLoginQr(data)}.getOrNull()}
-        val sessionSource=loginSource
+        val sessionSource=remember(data) {loginSource}
         var sms by remember(data) {mutableStateOf<JsonObject?>(null)}
         var smsCode by remember(data) {mutableStateOf("")}
         var smsBusy by remember(data) {mutableStateOf(false)}
@@ -113,7 +126,7 @@ fun AccountSettings() {
                     qr();Spacer(Modifier.height(12.dp));statusPanel()
                 }
             }
-        },confirmButton={TextButton(onClick={session=null}){Text("关闭")}},dismissButton={TextButton(onClick={session=null;scope.launch {generating=true;try {session=ApiClient.json("/qr_login/$sessionSource",method="POST").asJsonObject} catch(e:CancellationException){throw e} catch(e:Exception){message=e.message?:"重新生成失败"} finally {generating=false}}}){Text("重新生成")}})
+        },confirmButton={TextButton(onClick={session=null}){Text("关闭")}},dismissButton={TextButton(onClick={generateQr(sessionSource)}){Text("重新生成")}})
 
     }
 }

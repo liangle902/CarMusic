@@ -436,7 +436,9 @@ func DownloadWithDedupCheckWithTemplate(song *model.Song, outDir string, withCov
 	if result != nil {
 		relPath = relativeDownloadPath(outDir, result.SavedPath)
 	}
-	_ = SaveDownloadRecordWithRelPath(song.Name, song.Artist, song.Source, DownloadStatusSuccess, "", relPath)
+	if err := SaveDownloadRecordWithRelPath(song.Name, song.Artist, song.Source, DownloadStatusSuccess, "", relPath); err != nil && result != nil {
+		result.Warning = strings.TrimSpace(result.Warning + "\n音乐文件已保存，但下载记录保存失败，请检查存储空间")
+	}
 	if dedupSet != nil {
 		dedupSet[key] = relPath
 	}

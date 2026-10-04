@@ -1,6 +1,6 @@
 # 第三方组件与来源
 
-星河音乐项目仓库：[liangle902/CarMusic](https://github.com/liangle902/CarMusic)（私有）。本文件与源码、构建脚本和许可证一起交付，记录当前构建的第三方来源。
+星河音乐项目仓库：[liangle902/CarMusic](https://github.com/liangle902/CarMusic)。本文件与源码、构建脚本和许可证一起交付，记录当前构建的第三方来源。
 
 | 组件 | 来源 | 说明 |
 | --- | --- | --- |
@@ -11,5 +11,8 @@
 | AndroidX / Compose / Media3 | Google AndroidX Maven | 原生界面、媒体会话、播放和缓存；Apache 2.0。版本在 `app/build.gradle.kts`。 |
 | OkHttp / Gson / ZXing | 各组件官方 Maven 发布 | 请求、JSON、二维码；Apache 2.0。 |
 | Coil | Coil 官方 Maven 发布 | 封面加载；Apache 2.0。 |
+| Reorderable 2.2.0 | https://github.com/Calvin-LL/Reorderable/tree/v2.2.0 | `sh.calvin.reorderable:reorderable`；队列拖动跟手、实时让位和边缘滚动；Apache 2.0。与当前 Compose 1.6.6 配套使用。 |
 
-目前 APK 为本地开发验证构建，不代表已完成面向公众的分发材料。源码和二进制来源应在发布时保持一致。
+正式发布附件与对应版本的源码共同交付。保留上游许可证和组件来源。
+
+FFmpeg 配置、许可证与对应源码交付状态见 [FFMPEG_SOURCE.md](FFMPEG_SOURCE.md)。随包包含 GPL v3 原文；镜像自定义程序的完整对应源码仍需补齐，不能仅凭源码仓库链接认定分发材料完整。

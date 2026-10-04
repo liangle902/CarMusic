@@ -11,7 +11,8 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.util.concurrent.TimeUnit
 
-private val videoHttp = OkHttpClient.Builder().readTimeout(60, TimeUnit.SECONDS).build()
+private val videoHttp = com.carmusic.app.engine.ApiClient.httpClient.newBuilder()
+    .readTimeout(60, TimeUnit.SECONDS).build()
 
 private suspend fun copyVideoAsset(input: InputStream, output: OutputStream, limit: Long = Long.MAX_VALUE): Long {
     val buffer = ByteArray(64 * 1024)

@@ -8,6 +8,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -22,10 +25,16 @@ internal fun SongTitle(
     lineHeight: TextUnit = TextUnit.Unspecified,
     color: Color = LocalContentColor.current,
     fontWeight: FontWeight? = null,
-    scrolling: Boolean = true
+    scrolling: Boolean = true,
+    suffix: String? = null,
+    suffixFontSize: TextUnit = TextUnit.Unspecified,
+    suffixColor: Color = color
 ) {
     Text(
-        text = text.replace('\n', ' ').replace('\r', ' '),
+        text = buildAnnotatedString {
+            append(text.replace('\n', ' ').replace('\r', ' '))
+            if(!suffix.isNullOrBlank()) withStyle(SpanStyle(fontSize=suffixFontSize,color=suffixColor,fontWeight=FontWeight.Normal)) {append(" · $suffix")}
+        },
         modifier = if (scrolling) modifier.basicMarquee(
             iterations = Int.MAX_VALUE,
             initialDelayMillis = 1200,

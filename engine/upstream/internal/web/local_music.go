@@ -464,7 +464,10 @@ func RegisterLocalMusicRoutes(api *gin.RouterGroup) {
 			rootAbs, _ := filepath.Abs(localMusicDownloadDir())
 			items := make([]localMusicDupItem, 0, len(songs))
 			for _, s := range songs {
-				absPath := filepath.Join(rootAbs, filepath.FromSlash(s.RelPath))
+				absPath, pathErr := indexedLocalPath(rootAbs, s.RelPath)
+				if pathErr != nil {
+					continue
+				}
 				if info, statErr := os.Stat(absPath); statErr != nil || info.IsDir() {
 					continue
 				}
@@ -1226,8 +1229,7 @@ func localMusicTrackByID(id string) (*localMusicTrack, error) {
 	if err != nil {
 		return nil, err
 	}
-	audioPath := filepath.Join(rootAbs, cleanRel)
-	absPath, err := filepath.Abs(audioPath)
+	absPath, err := indexedLocalPath(rootAbs, cleanRel)
 	if err != nil {
 		return nil, err
 	}

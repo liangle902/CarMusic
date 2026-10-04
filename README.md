@@ -46,9 +46,11 @@ v1.5.0 支持竖屏与横屏自适应，手机旋转时自动切换布局，适�
 - 首页提供正在播放、歌单列表、我的收藏、系统设置四个模块；侧栏统一导航，可展开或收起。
 - 日间、夜间、跟随系统主题；专辑封面与旋转黑胶可选，启动自动播放默认关闭。
 - 长歌名单行向左滚动；图标控制上一首、播放／暂停、下一首；点击图标循环切换顺序、随机、单曲循环、列表循环。
+- 播放页在歌曲标题后以较小字号显示音频码率；缺少可靠码率时隐藏。
 - 逐行、逐字及翻译／音译歌词。滑动浏览，点击歌词跳转播放；停止浏览 2 秒后回到当前歌词。
 - 当前播放队列支持右侧手柄拖动、实时让位、边缘滚动、移除和清空。播放整张歌单替换队列；单曲置于队首播放，保留其他歌曲。
-- 支持多平台搜索、平台账号扫码关联、个人与推荐歌单、本地歌单和红心收藏。歌单多选后可下载所选或加入本地歌单。
+- 支持多平台搜索、平台账号扫码关联、个人与推荐歌单、本地歌单和红心收藏。歌单多选后可下载所选或加入本地歌单；搜索多选也可按结果顺序加入正在播放列表。
+- 搜索框手动清空后恢复初始页面，歌曲、歌单和专辑入口保持可见。
 - 本地音乐自动扫描媒体库和已授权目录，监听存储变化；U 盘首次添加目录授权后可持续扫描。移除本地引用保留原文件。
 - 下载管理、播放缓存、失效自动换源和成功来源保存；播放队列操作不修改原歌单。
 - 通知栏显示歌名、当前歌词及播放控制，可在设置中管理；支持系统媒体会话和音频焦点。
@@ -67,7 +69,7 @@ v1.5.0 支持竖屏与横屏自适应，手机旋转时自动切换布局，适�
 | `docs/` | 产品规格、第三方来源、截图与版本说明 |
 | `scripts/` | Release 构建与导出脚本 |
 
-包名 `com.carmusic.app`。引擎仅监听设备本机 `127.0.0.1`，端口由系统动态分配，服务路径 `/music`。
+包名 `com.carmusic.app`。引擎仅监听设备本机 `127.0.0.1`，端口由系统动态分配，服务路径 `/music`。业务接口使用运行时随机令牌，令牌只发给当前本机引擎。账号与 WebDAV 配置加密存储，存储密钥由 Android Keystore 保护；敏感运行数据不参与备份。
 
 要求 JDK 17、Android SDK 34、Go 1.25.1 或兼容版本。通过本机 `local.properties` 配置 `sdk.dir`。构建无签名 APK：
 
@@ -78,7 +80,7 @@ v1.5.0 支持竖屏与横屏自适应，手机旋转时自动切换布局，适�
 输出 `app/build/outputs/apk/release/app-release-unsigned.apk`。正式附件使用独立签名，不允许调试。重新编译引擎并签名导出：
 
 ```powershell
-.\scriptsuild-android.ps1 -KeyStore '仓库外的签名文件' -KeyAlias '签名别名' -ExportDirectory '交付目录'
+.\scripts\build-android.ps1 -KeyStore '仓库外的签名文件' -KeyAlias '签名别名' -ExportDirectory '交付目录'
 ```
 
 签名口令通过进程环境变量 `CARMUSIC_SIGNING_PASSWORD` 提供。签名文件、口令、SDK 路径及运行数据不提交到仓库；已有安装迁移签名时，脚本支持传入签名谱系及原签名文件。
@@ -86,3 +88,13 @@ v1.5.0 支持竖屏与横屏自适应，手机旋转时自动切换布局，适�
 ## 来源与许可证
 
 功能来源：[GoMusicDll](https://github.com/guohuiyuan/go-music-dl)。项目保留 GNU AGPL v3 许可证与上游源码，详见 [LICENSE](LICENSE)、[上游基线](docs/UPSTREAM_ORIGIN.md) 和 [第三方说明](docs/THIRD_PARTY_NOTICES.md)。
+
+自动检查命令：
+
+```powershell
+.\gradlew.bat :app:testReleaseUnitTest :app:lintRelease
+Set-Location engine/upstream
+go test ./core ./internal/web ./internal/appshell ./internal/cli ./cmd/music-dl -timeout 180s
+```
+
+GitHub Actions 执行回归检查并构建未签名 APK，不含签名口令。[FFmpeg 来源与对应源码交付状态](docs/FFMPEG_SOURCE.md) 另行记录。

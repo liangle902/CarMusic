@@ -218,7 +218,11 @@ func loadTracksFromIndex(offset int, limit int) ([]*localMusicTrack, int, bool) 
 	for i := range rows {
 		row := &rows[i]
 		// 快速校验文件是否还在磁盘上
-		absPath := filepath.Join(rootAbs, filepath.FromSlash(row.RelPath))
+		absPath, pathErr := indexedLocalPath(rootAbs, row.RelPath)
+		if pathErr != nil {
+			missingIDs = append(missingIDs, row.ID)
+			continue
+		}
 		if info, statErr := os.Stat(absPath); statErr != nil || info.IsDir() {
 			missingIDs = append(missingIDs, row.ID)
 			continue
@@ -307,7 +311,11 @@ func findLocalMusicMatch(name string, artist string) (*LocalMusicIndex, string, 
 			}
 			seenIDs[row.ID] = struct{}{}
 
-			absPath := filepath.Join(rootAbs, filepath.FromSlash(row.RelPath))
+			absPath, pathErr := indexedLocalPath(rootAbs, row.RelPath)
+			if pathErr != nil {
+				staleIDs = append(staleIDs, row.ID)
+				continue
+			}
 			if info, statErr := os.Stat(absPath); statErr != nil || info.IsDir() {
 				staleIDs = append(staleIDs, row.ID)
 				continue
@@ -406,7 +414,11 @@ func localMusicSearchSongs(keyword string, limit int) []model.Song {
 	for i := range rows {
 		row := &rows[i]
 		if rootAbs != "" {
-			absPath := filepath.Join(rootAbs, filepath.FromSlash(row.RelPath))
+			absPath, pathErr := indexedLocalPath(rootAbs, row.RelPath)
+			if pathErr != nil {
+				deleteLocalMusicIndexRow(row.ID)
+				continue
+			}
 			if info, statErr := os.Stat(absPath); statErr != nil || info.IsDir() {
 				deleteLocalMusicIndexRow(row.ID)
 				continue
