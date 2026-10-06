@@ -110,8 +110,19 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    private val oneOsKeys by lazy {
+        OneOsKeys(this) { key ->
+            when (key) {
+                OneOsKeys.KEY_PLAY_PAUSE -> togglePlayPause()
+                OneOsKeys.KEY_NEXT -> playNext()
+                OneOsKeys.KEY_PREVIOUS -> playPrevious()
+            }
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
+        oneOsKeys.start()
         setMediaNotificationProvider(object:DefaultMediaNotificationProvider(this) {
             override fun getNotificationContentText(metadata:MediaMetadata):CharSequence = notificationLyric.takeIf {it.isNotBlank()}?:metadata.artist?:"星河音乐"
         })
@@ -552,6 +563,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        oneOsKeys.stop()
         persistSession()
         serviceScope.cancel()
         mediaSession?.run {

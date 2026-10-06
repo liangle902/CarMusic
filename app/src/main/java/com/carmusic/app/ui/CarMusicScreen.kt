@@ -37,6 +37,7 @@ private val KEEP_ALIVE_PAGES = listOf("全网搜索", "歌单列表", "我的收
 fun CarMusicScreen(service: PlaybackService) {
     var page by rememberSaveable { mutableStateOf("首页") }
     var returnPage by rememberSaveable { mutableStateOf("首页") }
+    var artistSearch by remember { mutableStateOf<Pair<Long, String>?>(null) }
     // 已访问过的页面保持组合，切走再回来时搜索结果、歌单详情等状态不丢失。
     val alive = remember { mutableSetOf<String>() }
     if (page in KEEP_ALIVE_PAGES) alive.add(page)
@@ -116,10 +117,10 @@ fun CarMusicScreen(service: PlaybackService) {
                             val pageContent: @Composable (String) -> Unit = { name ->
                             when (name) {
                                 "首页" -> NativeHome(service, navigate)
-                                "正在播放" -> NativePlayer(service) { queueOpen = true }
+                                "正在播放" -> NativePlayer(service, onArtist = { artistSearch = System.nanoTime() to it; navigate("全网搜索") }) { queueOpen = true }
                                 "歌单列表" -> NativeLibrary(service, false, navigate) { songs, header, actions -> SongList(songs, service, header = header, actions = actions) }
                                 "我的收藏" -> NativeLibrary(service, true, navigate) { songs, header, actions -> SongList(songs, service, "还没有收藏的音乐", header = header, actions = actions) }
-                                "全网搜索" -> NativeSearch(service)
+                                "全网搜索" -> NativeSearch(service, artistSearch)
                                 "系统设置" -> NativeSettings(service, { splash = true }, { navigate("本地音乐") }, { navigate("视频制作") })
                                 "本地音乐" -> LocalLibrary(service) { songs, remove, batchRemove -> SongList(songs, service, "导入音乐后可离线播放", remove, batchRemove, "移除本地音乐") }
                                 "视频制作" -> VideoEditor(current, service)
@@ -140,20 +141,7 @@ fun CarMusicScreen(service: PlaybackService) {
                             if (page !in KEEP_ALIVE_PAGES) pageContent(page)
                         }
                         if (page !in listOf("正在播放", "首页") && current != null) {
-                            Surface(onClick = { navigate("正在播放") }, tonalElevation = 3.dp, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth().padding(vertical = if (layout.compactHeight) 4.dp else 12.dp)) {
-                                if (layout.compactHeight) Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Column(Modifier.weight(1f)) { SongTitle(current!!.name, fontSize = 13.sp); MiniLyric(service, compact = true) }
-                                    IconButton(onClick = service::togglePlayPause, modifier = Modifier.semantics { contentDescription = if (playing) "暂停" else "播放" }) { MusicIcon(if (playing) "暂停" else "播放") }
-                                    IconButton(onClick = { queueOpen = true }, modifier = Modifier.semantics { contentDescription = "打开播放队列" }) { MusicIcon("播放队列") }
-                                } else Column {
-                                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        SongTitle(current!!.name, Modifier.weight(1f))
-                                        IconButton(onClick = service::togglePlayPause, modifier = Modifier.semantics { contentDescription = if (playing) "暂停" else "播放" }) { MusicIcon(if (playing) "暂停" else "播放") }
-                                        IconButton(onClick = { queueOpen = true }, modifier = Modifier.semantics { contentDescription = "打开播放队列" }) { MusicIcon("播放队列") }
-                                    }
-                                    MiniLyric(service)
-                                }
-                            }
+                            MiniPlayerBar(service, current!!, playing, { navigate("正在播放") }, { queueOpen = true })
                         }
                     }
                 }
@@ -266,7 +254,7 @@ private fun SongList(songs: List<SongItem>, service: PlaybackService, empty: Str
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun NativeSearch(service: PlaybackService) {
+private fun NativeSearch(service: PlaybackService, externalSearch: Pair<Long, String>? = null) {
     var opened by remember {mutableStateOf<PlaylistItem?>(null)}
     var query by remember { mutableStateOf("") }; var songs by remember { mutableStateOf<List<SongItem>>(emptyList()) }; var busy by remember { mutableStateOf(false) }; var error by remember { mutableStateOf<String?>(null) }
     var kind by remember {mutableStateOf("song")};var resultKind by remember {mutableStateOf("song")};var selected by remember {mutableStateOf(AppStore.searchSources())};var sources by remember {mutableStateOf<List<SourceCapability>>(emptyList())};var groups by remember {mutableStateOf<List<PlaylistItem>>(emptyList())}
@@ -303,6 +291,13 @@ private fun NativeSearch(service: PlaybackService) {
                 if(requests.isCurrent(request)) {songs=responses.flatMap {it.first}.distinctBy {it.key};groups=responses.flatMap {it.second}.distinctBy {it.source+":"+it.id};resultKind=requestedKind}
             } catch(e: CancellationException) {throw e} catch(e:Exception) {if(requests.isCurrent(request)) error=e.message} finally {if(requests.isCurrent(request)) busy=false}
         } }
+    // 从播放页点击歌手进入：用歌手名按歌曲类型直接搜索；等音源列表加载完再发起。
+    LaunchedEffect(externalSearch, sources.isNotEmpty()) {
+        val request = externalSearch ?: return@LaunchedEffect
+        if (sources.isEmpty()) return@LaunchedEffect
+        query = request.second; kind = "song"; opened = null
+        if (eligible.any { it.id in selected }) search()
+    }
     val updateQuery: (String) -> Unit = { value ->
         val cleared = query.isNotEmpty() && value.isEmpty()
         query = value

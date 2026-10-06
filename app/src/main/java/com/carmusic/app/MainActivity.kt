@@ -42,6 +42,21 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // 车机等大屏系统密度偏低（如 160dpi），按手机约 411dp 的短边设计整体放大。
+    // 直接放大 Activity 的资源密度，对话框、底部面板等独立窗口也同步生效。
+    override fun attachBaseContext(newBase: Context) {
+        val metrics = newBase.resources.displayMetrics
+        val shortDp = minOf(metrics.widthPixels, metrics.heightPixels) / metrics.density
+        val scale = if (shortDp >= 600f) (shortDp / 411f).coerceIn(1f, 2.5f) else 1f
+        if (scale == 1f) { super.attachBaseContext(newBase); return }
+        val config = android.content.res.Configuration(newBase.resources.configuration)
+        config.densityDpi = (config.densityDpi * scale).toInt()
+        config.screenWidthDp = (config.screenWidthDp / scale).toInt()
+        config.screenHeightDp = (config.screenHeightDp / scale).toInt()
+        config.smallestScreenWidthDp = (config.smallestScreenWidthDp / scale).toInt()
+        super.attachBaseContext(newBase.createConfigurationContext(config))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)

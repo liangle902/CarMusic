@@ -1,6 +1,7 @@
 package com.carmusic.app.ui
 
 import androidx.compose.foundation.interaction.DragInteraction
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.material3.*
@@ -21,7 +22,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.collectLatest
 
 @Composable
-internal fun NativePlayer(service: PlaybackService, openQueue: () -> Unit) {
+internal fun NativePlayer(service: PlaybackService, onArtist: (String) -> Unit = {}, openQueue: () -> Unit) {
     val song by service.currentSong.collectAsState()
     val decodedBitrate by service.audioBitrate.collectAsState()
     val resolved by service.resolvedSong.collectAsState()
@@ -98,7 +99,7 @@ internal fun NativePlayer(service: PlaybackService, openQueue: () -> Unit) {
                             val size = minOf(availableWidth * .19f, (availableHeight - 104.dp).coerceAtLeast(48.dp), 180.dp)
                             AlbumArtwork(cover, vinyl, playing, size)
                             Column(Modifier.weight(1f)) {
-                                PlayerSongInfo(song, favorite, service::toggleFavorite, compact = true, bitrate = bitrate)
+                                PlayerSongInfo(song, favorite, service::toggleFavorite, compact = true, bitrate = bitrate, onArtist = onArtist)
                                 song?.let { SongSourceStatus(it) }
                                 error?.let { Text(it, color = MaterialTheme.colorScheme.error, maxLines = 2, fontSize = 11.sp) }
                             }
@@ -109,7 +110,7 @@ internal fun NativePlayer(service: PlaybackService, openQueue: () -> Unit) {
                             val size = minOf(availableWidth * .3f, (availableHeight - 240.dp).coerceAtLeast(80.dp), 350.dp)
                             AlbumArtwork(cover, vinyl, playing, size)
                             Spacer(Modifier.height(16.dp))
-                            PlayerSongInfo(song, favorite, service::toggleFavorite, compact = false, bitrate = bitrate)
+                            PlayerSongInfo(song, favorite, service::toggleFavorite, compact = false, bitrate = bitrate, onArtist = onArtist)
                             song?.let { SongSourceStatus(it) }
                             error?.let { Text(it, color = MaterialTheme.colorScheme.error, maxLines = 2) }
                         }
@@ -121,7 +122,7 @@ internal fun NativePlayer(service: PlaybackService, openQueue: () -> Unit) {
                 }
             }
             if (!horizontal) {
-                PlayerSongInfo(song, favorite, service::toggleFavorite, compact = window.compactHeight, bitrate = bitrate)
+                PlayerSongInfo(song, favorite, service::toggleFavorite, compact = window.compactHeight, bitrate = bitrate, onArtist = onArtist)
                 song?.let { SongSourceStatus(it) }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error, maxLines = 2) }
             }
@@ -131,15 +132,26 @@ internal fun NativePlayer(service: PlaybackService, openQueue: () -> Unit) {
 }
 
 @Composable
-private fun PlayerSongInfo(song: SongItem?, favorite: Boolean, toggleFavorite: () -> Unit, compact: Boolean, bitrate: Int?) {
+private fun PlayerSongInfo(song: SongItem?, favorite: Boolean, toggleFavorite: () -> Unit, compact: Boolean, bitrate: Int?, onArtist: (String) -> Unit) {
     Row(Modifier.fillMaxWidth().padding(top = if (compact) 0.dp else 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             SongTitle(song?.name ?: "还没有正在播放的歌曲", fontSize = if (compact) 20.sp else 24.sp,
                 suffix=bitrate?.takeIf {song!=null&&it>0}?.let {"$it kbps"},suffixFontSize=if(compact) 12.sp else 14.sp,
                 suffixColor=MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(song?.let { "${it.artist} · ${it.album}" } ?: "去歌单或搜索中选择音乐",
-                color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, maxLines = 1,
-                overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp, bottom = if (compact) 6.dp else 12.dp))
+            val artists = song?.artist.orEmpty().split(Regex("\\s*(?:[&/、,，;；]|\\sfeat\\.?\\s)\\s*")).map { it.trim() }.filter { it.isNotEmpty() }
+            val colors = MaterialTheme.colorScheme
+            Row(Modifier.padding(top = 2.dp, bottom = if (compact) 4.dp else 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (song == null) Text("去歌单或搜索中选择音乐", color = colors.onSurfaceVariant, fontSize = 13.sp)
+                else {
+                    artists.forEachIndexed { index, name ->
+                        if (index > 0) Text(" / ", color = colors.onSurfaceVariant, fontSize = 13.sp)
+                        Text(name, color = colors.primary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.heightIn(min = 40.dp).wrapContentHeight(Alignment.CenterVertically)
+                                .clickable(onClickLabel = "搜索歌手 $name") { onArtist(name) })
+                    }
+                    if (song.album.isNotBlank()) Text(" · ${song.album}", color = colors.onSurfaceVariant, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                }
+            }
         }
         IconButton(onClick = toggleFavorite, enabled = song != null,
             modifier = Modifier.semantics { contentDescription = if (favorite) "取消收藏当前歌曲" else "收藏当前歌曲" }) {
