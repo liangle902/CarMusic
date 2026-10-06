@@ -269,7 +269,7 @@ private fun NativeSearch(service: PlaybackService, externalSearch: Pair<Long, St
     var searchJob by remember { mutableStateOf<Job?>(null) }
     val eligible by remember {derivedStateOf {sources.filter {it.search&&when(kind){"playlist"->it.playlist;"album"->it.album;else->true}}}}
     val canSearch by remember {derivedStateOf {query.isNotBlank() && eligible.any {it.id in selected} && !busy}}
-    LaunchedEffect(Unit){try {sources=ApiClient.sources()} catch(e:CancellationException){throw e} catch(e:Exception){error=e.message}}
+    LaunchedEffect(Unit){try {sources=ApiClient.sources();if(selected.isEmpty()) {selected=sources.filter {it.search}.map {it.id}.toSet();draftSources=selected}} catch(e:CancellationException){throw e} catch(e:Exception){error=e.message}}
     val search: () -> Unit = {
         val request = requests.begin()
         searchJob?.cancel()

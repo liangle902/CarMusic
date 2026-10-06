@@ -26,7 +26,11 @@ internal fun NativePlayer(service: PlaybackService, onArtist: (String) -> Unit =
     val song by service.currentSong.collectAsState()
     val decodedBitrate by service.audioBitrate.collectAsState()
     val resolved by service.resolvedSong.collectAsState()
-    val bitrate=decodedBitrate?:resolved?.bitrate?.takeIf {it>0}?.let {if(it>=10000) (it+500)/1000 else it}
+    val candidates by service.candidates.collectAsState()
+    val bitrate=decodedBitrate?:candidates.firstOrNull {it.song.key==resolved?.key}?.bitrate?.takeIf {it>0}
+        ?:resolved?.bitrate?.takeIf {it>0}?.let {if(it>=10000) (it+500)/1000 else it}
+    var choosingSource by remember { mutableStateOf(false) }
+    val chooseSource = { choosingSource = true }
     val position by service.currentPosition.collectAsState()
     val duration by service.duration.collectAsState()
     val playing by service.isPlaying.collectAsState()
@@ -41,13 +45,17 @@ internal fun NativePlayer(service: PlaybackService, onArtist: (String) -> Unit =
     var lyricRetry by remember { mutableIntStateOf(0) }
     val state = rememberLazyListState()
     var browsingLyrics by remember { mutableStateOf(false) }
+    var lyricsFor by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(song?.key, resolved?.key, lyricRetry) {
-        lyrics = emptyList(); lyricError = null
+        // 同一首歌只是换了码率版本时，先保留已有歌词，新歌词到了再替换，避免闪一下。
+        val sameSong = lyricsFor == song?.key
+        if (!sameSong) lyrics = emptyList()
+        lyricError = null
         (resolved ?: song)?.let {
             lyricLoading = true
-            try { lyrics = ApiClient.fetchLyrics(it) }
+            try { ApiClient.fetchLyrics(it).let { loaded -> if (loaded.isNotEmpty() || !sameSong) lyrics = loaded }; lyricsFor = song?.key }
             catch (e: CancellationException) { throw e }
-            catch (e: Exception) { lyricError = e.message ?: "歌词暂时无法加载" }
+            catch (e: Exception) { if (!sameSong) lyricError = e.message ?: "歌词暂时无法加载" }
             finally { lyricLoading = false }
         }
     }
@@ -99,8 +107,7 @@ internal fun NativePlayer(service: PlaybackService, onArtist: (String) -> Unit =
                             val size = minOf(availableWidth * .19f, (availableHeight - 104.dp).coerceAtLeast(48.dp), 180.dp)
                             AlbumArtwork(cover, vinyl, playing, size)
                             Column(Modifier.weight(1f)) {
-                                PlayerSongInfo(song, favorite, service::toggleFavorite, compact = true, bitrate = bitrate, onArtist = onArtist)
-                                song?.let { SongSourceStatus(it) }
+                                PlayerSongInfo(song, favorite, service::toggleFavorite, compact = true, bitrate = bitrate, onArtist = onArtist, onBitrate = chooseSource)
                                 error?.let { Text(it, color = MaterialTheme.colorScheme.error, maxLines = 2, fontSize = 11.sp) }
                             }
                         }
@@ -110,8 +117,7 @@ internal fun NativePlayer(service: PlaybackService, onArtist: (String) -> Unit =
                             val size = minOf(availableWidth * .3f, (availableHeight - 240.dp).coerceAtLeast(80.dp), 350.dp)
                             AlbumArtwork(cover, vinyl, playing, size)
                             Spacer(Modifier.height(16.dp))
-                            PlayerSongInfo(song, favorite, service::toggleFavorite, compact = false, bitrate = bitrate, onArtist = onArtist)
-                            song?.let { SongSourceStatus(it) }
+                            PlayerSongInfo(song, favorite, service::toggleFavorite, compact = false, bitrate = bitrate, onArtist = onArtist, onBitrate = chooseSource)
                             error?.let { Text(it, color = MaterialTheme.colorScheme.error, maxLines = 2) }
                         }
                     }
@@ -122,22 +128,59 @@ internal fun NativePlayer(service: PlaybackService, onArtist: (String) -> Unit =
                 }
             }
             if (!horizontal) {
-                PlayerSongInfo(song, favorite, service::toggleFavorite, compact = window.compactHeight, bitrate = bitrate, onArtist = onArtist)
-                song?.let { SongSourceStatus(it) }
+                PlayerSongInfo(song, favorite, service::toggleFavorite, compact = window.compactHeight, bitrate = bitrate, onArtist = onArtist, onBitrate = chooseSource)
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error, maxLines = 2) }
             }
             PlayerTransport(service, position, duration, playing, mode, song != null, horizontal || window.compactHeight, openQueue)
         }
     }
+    if (choosingSource) song?.let { BitratePicker(it, resolved, service) { choosingSource = false } }
+}
+
+/** 列出当前歌曲可播放的各档码率，点选后切换；不展示来自哪个平台。 */
+@Composable
+private fun BitratePicker(song: SongItem, resolved: SongItem?, service: PlaybackService, onClose: () -> Unit) {
+    var options by remember { mutableStateOf(service.candidates.value) }
+    var loading by remember { mutableStateOf(true) }
+    LaunchedEffect(song.key) {
+        try { options = service.loadCandidates() } catch (e: CancellationException) { throw e } catch (_: Exception) { }
+        loading = false
+    }
+    AlertDialog(onDismissRequest = onClose, title = { Text("选择码率") }, confirmButton = { TextButton(onClick = onClose) { Text("关闭") } }, text = {
+        Column {
+            if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if (!loading && options.isEmpty()) Text("没有找到其他可用的码率")
+            val currentKey = (resolved ?: song).key
+            // 码率相同的版本对用户没有区别，只保留一个（优先保留正在播放的）。
+            val shown = options.sortedByDescending { it.song.key == currentKey }.distinctBy { it.bitrate }.sortedByDescending { it.bitrate }
+            LazyColumn(Modifier.heightIn(max = musicDialogContentHeight(350.dp))) {
+                items(shown, key = { it.song.key }) { option ->
+                    val current = option.song.key == currentKey
+                    TextButton(onClick = { if (!current) service.playAlternate(song, option.song); onClose() }, modifier = Modifier.fillMaxWidth()) {
+                        Text((if (option.bitrate > 0) "${option.bitrate} kbps" else "未知码率") + (if (current) " · 当前" else ""),
+                            Modifier.fillMaxWidth(), color = if (current) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                    }
+                }
+            }
+        }
+    })
 }
 
 @Composable
-private fun PlayerSongInfo(song: SongItem?, favorite: Boolean, toggleFavorite: () -> Unit, compact: Boolean, bitrate: Int?, onArtist: (String) -> Unit) {
+private fun PlayerSongInfo(song: SongItem?, favorite: Boolean, toggleFavorite: () -> Unit, compact: Boolean, bitrate: Int?, onArtist: (String) -> Unit, onBitrate: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(top = if (compact) 0.dp else 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            SongTitle(song?.name ?: "还没有正在播放的歌曲", fontSize = if (compact) 20.sp else 24.sp,
-                suffix=bitrate?.takeIf {song!=null&&it>0}?.let {"$it kbps"},suffixFontSize=if(compact) 12.sp else 14.sp,
-                suffixColor=MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SongTitle(song?.name ?: "还没有正在播放的歌曲", Modifier.weight(1f, fill = false), fontSize = if (compact) 20.sp else 24.sp)
+                // 码率可点击：打开音源列表手动切换。本地歌曲只显示不可点。
+                if (song != null && (song.source != "local" || bitrate != null)) {
+                    val label = bitrate?.takeIf { it > 0 }?.let { "$it kbps" } ?: "码率"
+                    Text(" · $label", fontSize = if (compact) 12.sp else 14.sp, maxLines = 1,
+                        color = if (song.source == "local") MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.heightIn(min = 40.dp).wrapContentHeight(Alignment.CenterVertically)
+                            .then(if (song.source == "local") Modifier else Modifier.clickable(onClickLabel = "切换码率", onClick = onBitrate)))
+                }
+            }
             val artists = song?.artist.orEmpty().split(Regex("\\s*(?:[&/、,，;；]|\\sfeat\\.?\\s)\\s*")).map { it.trim() }.filter { it.isNotEmpty() }
             val colors = MaterialTheme.colorScheme
             Row(Modifier.padding(top = 2.dp, bottom = if (compact) 4.dp else 10.dp), verticalAlignment = Alignment.CenterVertically) {

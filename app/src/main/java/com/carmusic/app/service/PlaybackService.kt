@@ -52,6 +52,7 @@ import java.io.File
 @OptIn(UnstableApi::class)
 class PlaybackService : MediaSessionService() {
     companion object {
+        private const val UPGRADE_MIN_GAIN_KBPS = 32
         private const val LOCAL_ACTION = "com.carmusic.app.BIND_PLAYBACK"
         private val bindingToken = java.util.UUID.randomUUID().toString()
         fun localBindingIntent(context: android.content.Context) = Intent(context, PlaybackService::class.java)
@@ -72,7 +73,14 @@ class PlaybackService : MediaSessionService() {
     private var notificationLyrics:Job?=null
     private var notificationLyric=""
     private val failedTracks = mutableSetOf<String>()
-    private val switchedTracks = mutableSetOf<String>()
+    private val failedSources = mutableSetOf<String>()
+    private val candidateCache = mutableMapOf<String, List<SourceCandidate>>()
+    private var prefetchJob: Job? = null
+    private var prefetchKey: String? = null
+    private var upgradeJob: Job? = null
+    private var upgradeKey: String? = null
+    private var mediaSourceFactory: DefaultMediaSourceFactory? = null
+    val candidates = MutableStateFlow<List<SourceCandidate>>(emptyList())
     val playingSource = MutableStateFlow("")
     val resolvedSong=MutableStateFlow<SongItem?>(null)
     val playbackError = MutableStateFlow<String?>(null)
@@ -186,7 +194,7 @@ class PlaybackService : MediaSessionService() {
             .setUpstreamDataSourceFactory(upstreamFactory)
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
 
-        val mediaSourceFactory = DefaultMediaSourceFactory(cacheDataSourceFactory)
+        val mediaSourceFactory = DefaultMediaSourceFactory(cacheDataSourceFactory).also { this.mediaSourceFactory = it }
 
         // 2. 车载音频属性配置 (自动避让高德导航与蓝牙通话)
         val audioAttributes = AudioAttributes.Builder()
@@ -227,6 +235,7 @@ class PlaybackService : MediaSessionService() {
                 }
                 if (state == Player.STATE_READY) {
                     duration.value = player.duration.coerceAtLeast(0L)
+                    prefetchNext()
                     currentSong.value?.let {original->resolvedSong.value?.let {resolved->AppStore.saveResolved(original,resolved)};AppStore.markPlayback(original,"可播放")}
                 } else if (state == Player.STATE_ENDED) {
                     // 清除旧媒体时也可能收到 ENDED；只有真实曲目结束才推进队列。
@@ -339,7 +348,7 @@ class PlaybackService : MediaSessionService() {
 
     fun playSong(song: SongItem) {
         failedTracks.clear()
-        switchedTracks.clear()
+        failedSources.clear()
         if (playlist.value.none { it.key == song.key }) playlist.value += song
         loadSong(song)
     }
@@ -350,16 +359,19 @@ class PlaybackService : MediaSessionService() {
 
     fun playAlternate(song: SongItem, alternative: SongItem) {
         if(playlist.value.none {it.key==song.key}) playlist.value+=song
-        failedTracks.clear();switchedTracks.clear()
+        failedTracks.clear();failedSources.clear()
+        upgradeJob?.cancel();upgradeKey=null
         loadSong(song,if(currentSong.value?.key==song.key) currentPosition.value else 0L,alternative)
     }
     private fun loadSong(song: SongItem, resume: Long = 0L, alternative: SongItem? = null) {
         resolveJob?.cancel()
         stallJob?.cancel()
+        if (upgradeKey != song.key) { upgradeJob?.cancel(); upgradeKey = null }
         resolveJob = serviceScope.launch {
             player.pause()
             player.clearMediaItems()
             audioBitrate.value = null
+            if (currentSong.value?.key != song.key) failedSources.clear()
             currentSong.value = song
             currentPosition.value = resume
             duration.value = song.duration * 1000
@@ -367,8 +379,19 @@ class PlaybackService : MediaSessionService() {
             playbackError.value = null
             persistSession()
             AppStore.markPlayback(song,"正在解析")
-            val resolved = alternative ?: AppStore.restoredResolved(song) ?: song
+            candidates.value = candidateCache[song.key].orEmpty()
+            // 本地、离线和已缓存的版本直接播放；其余向所有音源解析后取码率最高的可播放版本。
+            val known = alternative ?: AppStore.restoredResolved(song) ?: song
+            resolvedSong.value = known
+            val direct = known.streamUrl.takeIf { it.isNotBlank() && (known.source == "local" || it.startsWith("content:") || it.startsWith("file:")) }
+                ?: known.id.takeIf { known.source == "local" && (it.startsWith("content:") || it.startsWith("file:")) }
+                ?: if(alternative==null) ApiClient.offlineUri(song) else null
+            val cachedUrl=ApiClient.streamUrl(known).takeIf {url -> simpleCache?.let {cache -> val key=ApiClient.playbackCacheKey(Uri.parse(url));val length=ContentMetadata.getContentLength(cache.getContentMetadata(key));length>0 && cache.isCached(key,0,length)} == true}
+            val resolved = if (direct != null || cachedUrl != null || alternative != null) known
+                else pickSource(song) ?: run { advanceAfterFailure("所有音源都无法解析：${song.name}"); return@launch }
+            ensureActive()
             resolvedSong.value=resolved
+            playingSource.value = resolved.source
             notificationLyrics?.cancel();notificationLyric=""
             notificationLyrics=serviceScope.launch {
                 try {
@@ -381,17 +404,7 @@ class PlaybackService : MediaSessionService() {
                     }
                 } catch(e:CancellationException){throw e} catch(_:Exception){}
             }
-            playingSource.value = resolved.source
-            val direct = resolved.streamUrl.takeIf { it.isNotBlank() && (resolved.source == "local" || it.startsWith("content:") || it.startsWith("file:")) }
-                ?: resolved.id.takeIf { resolved.source == "local" && (it.startsWith("content:") || it.startsWith("file:")) }
-                ?: if(alternative==null) ApiClient.offlineUri(song) else null
-            val cachedUrl=ApiClient.streamUrl(resolved).takeIf {url -> simpleCache?.let {cache -> val key=ApiClient.playbackCacheKey(Uri.parse(url));val length=ContentMetadata.getContentLength(cache.getContentMetadata(key));length>0 && cache.isCached(key,0,length)} == true}
-            val info = try { if (direct == null && cachedUrl == null) (kotlinx.coroutines.withTimeoutOrNull(30000) { ApiClient.inspectStream(resolved) } ?: throw java.io.IOException("音源检测超时")) else null }
-                catch (e: CancellationException) { throw e }
-                catch (e: Exception) { handleFailure(e.message ?: "音源解析失败"); return@launch }
-            ensureActive()
-            val streamUrl = direct ?: cachedUrl ?: info?.takeIf { it.valid }?.let { ApiClient.streamUrl(resolved) }
-            if (streamUrl == null) { handleFailure("无法解析 ${song.name} 的音源"); return@launch }
+            val streamUrl = direct ?: cachedUrl ?: ApiClient.streamUrl(resolved)
             val metadata = MediaMetadata.Builder().setTitle(song.name).setArtist(song.artist).setAlbumTitle(song.album)
                 .apply { if (song.cover.isNotBlank()) setArtworkUri(Uri.parse(ApiClient.coverUrl(song.source, song.cover))) }.build()
             player.setMediaItem(MediaItem.Builder().setUri(streamUrl).setMediaId(song.key).setMediaMetadata(metadata).build(), resume)
@@ -406,18 +419,107 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    private fun autoSwitch() = AppStore.engineSettings.value?.get("autoSwitchInvalidSources")?.asBoolean != false
+
+    /**
+     * 取当前歌曲下一个可用的版本：先用已解析的列表，再试上次记住的版本，最后向所有音源解析。全部不可用时返回 null。
+     * 向所有音源解析时，第一个可播放的版本一出现就返回先播，其余结果回来后若有明显更高的码率再原地升级。
+     */
+    private suspend fun pickSource(song: SongItem): SongItem? {
+        if (prefetchKey == song.key) prefetchJob?.join()
+        if (upgradeKey == song.key) upgradeJob?.join()
+        candidateCache[song.key]?.let { cached -> return cached.firstOrNull { it.song.key !in failedSources }?.song }
+        AppStore.restoredResolved(song)?.takeIf { it.key !in failedSources }?.let { remembered ->
+            kotlinx.coroutines.withTimeoutOrNull(15000) { SourceResolver.probe(remembered) }?.let { return it.song }
+        }
+        val first = kotlinx.coroutines.CompletableDeferred<SourceCandidate?>()
+        upgradeKey = song.key
+        val job = serviceScope.launch {
+            val found = try { SourceResolver.candidates(song, autoSwitch(), waitAll = true) { first.complete(it) } } finally { first.complete(null) }
+            if (found.isNotEmpty()) cacheCandidates(song, found)
+            delay(200) // 让先播的版本先完成装载，再判断是否需要升级
+            val playing = found.firstOrNull { it.song.key == resolvedSong.value?.key }
+            val best = found.firstOrNull { it.song.key !in failedSources }
+            if (currentSong.value?.key == song.key && playing != null && best != null && best.bitrate >= playing.bitrate + UPGRADE_MIN_GAIN_KBPS) upgradeTo(song, best.song)
+        }
+        upgradeJob = job
+        val quick = first.await() ?: return null
+        if (quick.song.key !in failedSources) return quick.song
+        job.join()
+        return candidateCache[song.key]?.firstOrNull { it.song.key !in failedSources }?.song
+    }
+
+    /**
+     * 播放中换到更高码率的版本。先用静音的辅助播放器把新版本在当前进度附近缓冲进共享缓存，
+     * 主播放器再原地替换并从同一进度继续，切换间隙只剩解码器重启的时间。
+     */
+    private suspend fun upgradeTo(song: SongItem, better: SongItem) {
+        val factory = mediaSourceFactory ?: return
+        val url = ApiClient.streamUrl(better)
+        val warm = ExoPlayer.Builder(this).setMediaSourceFactory(factory).build()
+        try {
+            warm.volume = 0f
+            warm.playWhenReady = false
+            warm.setMediaItem(MediaItem.fromUri(url), player.currentPosition + 3000)
+            warm.prepare()
+            val ready = kotlinx.coroutines.withTimeoutOrNull(15000) {
+                while (warm.playbackState != Player.STATE_READY) { if (warm.playerError != null) return@withTimeoutOrNull false; delay(100) }
+                true
+            } ?: false
+            if (!ready) return
+            delay(1500)
+        } finally { warm.release() }
+        if (currentSong.value?.key != song.key || resolvedSong.value?.key == better.key || player.currentMediaItem == null) return
+        if (player.duration > 0 && player.duration - player.currentPosition < 20000) return
+        val wasPlaying = player.playWhenReady
+        resolvedSong.value = better
+        playingSource.value = better.source
+        audioBitrate.value = null
+        player.setMediaItem(MediaItem.Builder().setUri(url).setMediaId(song.key).setMediaMetadata(player.mediaMetadata).build(), player.currentPosition)
+        player.prepare()
+        player.playWhenReady = wasPlaying
+    }
+
+    private fun cacheCandidates(song: SongItem, found: List<SourceCandidate>) {
+        if (candidateCache.size > 200) candidateCache.clear()
+        candidateCache[song.key] = found
+        if (currentSong.value?.key == song.key) candidates.value = found
+    }
+
+    /** 当前歌曲在各音源上的可播放版本，供用户手动选择。 */
+    suspend fun loadCandidates(): List<SourceCandidate> {
+        val song = currentSong.value ?: return emptyList()
+        candidateCache[song.key]?.let { return it }
+        return SourceResolver.candidates(song, true).also { if (it.isNotEmpty()) cacheCandidates(song, it) }
+    }
+
+    // 当前歌曲起播后预先解析下一首，切歌时不用再等。
+    private fun prefetchNext() {
+        val list = playlist.value
+        val next = list.getOrNull(list.indexOfFirst { it.key == currentSong.value?.key } + 1) ?: return
+        if (next.source == "local" || next.key in candidateCache || AppStore.restoredResolved(next) != null || !autoSwitch()) return
+        prefetchJob?.cancel()
+        prefetchKey = next.key
+        prefetchJob = serviceScope.launch {
+            try { SourceResolver.candidates(next, true, waitAll = true).takeIf { it.isNotEmpty() }?.let { cacheCandidates(next, it) } }
+            catch (e: CancellationException) { throw e } catch (_: Exception) { }
+        }
+    }
+
+    // 单个音源失败不提示，静默换到下一个可用版本；全部失败才报错并跳到下一首。
     private fun handleFailure(message: String) {
-        playbackError.value = message
         val song=currentSong.value
-        song?.let {AppStore.markPlayback(it,"音源失效")}
-        if(song!=null && song.source!="local" && song.key !in switchedTracks && AppStore.engineSettings.value?.get("autoSwitchInvalidSources")?.asBoolean!=false) {
-            switchedTracks.add(song.key)
-            resolveJob?.cancel()
-            resolveJob=serviceScope.launch {
-                try {val alternative=kotlinx.coroutines.withTimeout(30000) {ApiClient.switchSource(resolvedSong.value?:song)};ensureActive();loadSong(song,currentPosition.value,alternative)}
-                catch(e:kotlinx.coroutines.TimeoutCancellationException){advanceAfterFailure("换源超时：$message")} catch(e:CancellationException){throw e} catch(_:Exception){advanceAfterFailure(message)}
-            }
-        } else advanceAfterFailure(message)
+        if(song==null || song.source=="local" || !autoSwitch()) { advanceAfterFailure(message); return }
+        failedSources.add((resolvedSong.value?:song).key)
+        resolveJob?.cancel()
+        stallJob?.cancel()
+        resolveJob=serviceScope.launch {
+            val next=pickSource(song)
+            ensureActive()
+            // 等待期间可能已升级到这个版本并在正常播放，不必重载。
+            if(next!=null && next.key==resolvedSong.value?.key && player.playbackState in listOf(Player.STATE_BUFFERING,Player.STATE_READY)) return@launch
+            if(next==null) advanceAfterFailure("所有音源都无法播放：${song.name}") else loadSong(song,currentPosition.value,next)
+        }
     }
     private fun advanceAfterFailure(message: String) {
         currentSong.value?.let { failedTracks.add(it.key) }
@@ -491,7 +593,7 @@ class PlaybackService : MediaSessionService() {
         if (player.currentMediaItem == null) {
             val song = currentSong.value ?: playlist.value.firstOrNull()
             if (song != null) {
-                failedTracks.clear(); switchedTracks.clear(); loadSong(song, currentPosition.value)
+                failedTracks.clear(); failedSources.clear(); loadSong(song, currentPosition.value)
             }
             return
         }
