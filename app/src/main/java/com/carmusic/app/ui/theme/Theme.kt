@@ -9,6 +9,15 @@ import androidx.compose.runtime.getValue
 import com.carmusic.app.data.AppStore
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+
+/** 界面按手机约 411dp 的短边设计；车机等大屏系统密度偏低，短边 dp 过大时整体等比放大。 */
+private const val DESIGN_SHORT_SIDE_DP = 411f
+private const val SCALE_THRESHOLD_DP = 600
+private const val MAX_UI_SCALE = 2.5f
 
 val DarkBackground = Color(0xFF151B23)
 val DarkSurface = Color(0xFF202832)
@@ -51,6 +60,12 @@ fun CarMusicTheme(
             secondaryContainer = Color(0xFFDAE8F3), onSecondaryContainer = Color(0xFF183E61),
             surfaceVariant = Color(0xFFE0E9F0), onSurfaceVariant = Color(0xFF4E6579),
             surfaceTint = Color(0xFF396D9B)),
-        content = content
+        content = {
+            val density = LocalDensity.current
+            val shortSideDp = LocalConfiguration.current.smallestScreenWidthDp
+            val scale = if (shortSideDp >= SCALE_THRESHOLD_DP) (shortSideDp / DESIGN_SHORT_SIDE_DP).coerceIn(1f, MAX_UI_SCALE) else 1f
+            if (scale == 1f) content()
+            else CompositionLocalProvider(LocalDensity provides Density(density.density * scale, density.fontScale)) { content() }
+        }
     )
 }

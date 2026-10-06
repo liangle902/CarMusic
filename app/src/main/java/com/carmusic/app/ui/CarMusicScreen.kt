@@ -26,18 +26,27 @@ import kotlinx.coroutines.flow.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.semantics.contentDescription
+
+private val KEEP_ALIVE_PAGES = listOf("全网搜索", "歌单列表", "我的收藏", "本地歌单")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CarMusicScreen(service: PlaybackService) {
     var page by rememberSaveable { mutableStateOf("首页") }
+    var returnPage by rememberSaveable { mutableStateOf("首页") }
+    // 已访问过的页面保持组合，切走再回来时搜索结果、歌单详情等状态不丢失。
+    val alive = remember { mutableSetOf<String>() }
+    if (page in KEEP_ALIVE_PAGES) alive.add(page)
     var expanded by rememberSaveable { mutableStateOf(false) }
     var queueOpen by remember { mutableStateOf(false) }
     var splash by rememberSaveable { mutableStateOf(true) }
     LocalMusicPermissionPrompt(ready = !splash)
     BackHandler(page != "首页" || queueOpen || splash) {
         if (splash) splash = false else if (queueOpen) queueOpen = false
+        else if (page == "正在播放") page = returnPage.takeIf { it != "正在播放" } ?: "首页"
         else page = if (page in listOf("本地音乐", "视频制作")) "系统设置" else if (page == "本地歌单") "歌单列表" else "首页"
     }
     val current by service.currentSong.collectAsState()
@@ -72,7 +81,9 @@ fun CarMusicScreen(service: PlaybackService) {
                 maxHeight - insets.calculateTopPadding() - insets.calculateBottomPadding())
             CompositionLocalProvider(LocalMusicWindow provides layout) {
                 val navigate: (String) -> Unit = { target ->
-                    focus.clearFocus(); page = target
+                    focus.clearFocus()
+                    if (target == "正在播放" && page != "正在播放") returnPage = page
+                    page = target
                     if (layout.width < 600.dp || layout.compactHeight) expanded = false
                 }
                 Row(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
@@ -102,7 +113,8 @@ fun CarMusicScreen(service: PlaybackService) {
                             if (page in listOf("歌单列表", "我的收藏")) IconButton(onClick = { navigate("全网搜索") }, modifier = Modifier.semantics { contentDescription = "搜索音乐" }) { MusicIcon("全网搜索") }
                         }
                         Box(Modifier.weight(1f)) {
-                            when (page) {
+                            val pageContent: @Composable (String) -> Unit = { name ->
+                            when (name) {
                                 "首页" -> NativeHome(service, navigate)
                                 "正在播放" -> NativePlayer(service) { queueOpen = true }
                                 "歌单列表" -> NativeLibrary(service, false, navigate) { songs, header, actions -> SongList(songs, service, header = header, actions = actions) }
@@ -119,6 +131,13 @@ fun CarMusicScreen(service: PlaybackService) {
                                 }
                                 "下载管理" -> NativeDownloadManager(service) { SongList(it, service, "还没有下载的音乐") }
                             }
+                            }
+                            KEEP_ALIVE_PAGES.forEach { name ->
+                                if (name in alive) key(name) {
+                                    Box(if (page == name) Modifier.fillMaxSize() else Modifier.size(0.dp).clipToBounds().clearAndSetSemantics {}) { pageContent(name) }
+                                }
+                            }
+                            if (page !in KEEP_ALIVE_PAGES) pageContent(page)
                         }
                         if (page !in listOf("正在播放", "首页") && current != null) {
                             Surface(onClick = { navigate("正在播放") }, tonalElevation = 3.dp, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth().padding(vertical = if (layout.compactHeight) 4.dp else 12.dp)) {
@@ -250,7 +269,7 @@ private fun SongList(songs: List<SongItem>, service: PlaybackService, empty: Str
 private fun NativeSearch(service: PlaybackService) {
     var opened by remember {mutableStateOf<PlaylistItem?>(null)}
     var query by remember { mutableStateOf("") }; var songs by remember { mutableStateOf<List<SongItem>>(emptyList()) }; var busy by remember { mutableStateOf(false) }; var error by remember { mutableStateOf<String?>(null) }
-    var kind by remember {mutableStateOf("song")};var resultKind by remember {mutableStateOf("song")};var selected by remember {mutableStateOf(setOf("qq","netease","kuwo"))};var sources by remember {mutableStateOf<List<SourceCapability>>(emptyList())};var groups by remember {mutableStateOf<List<PlaylistItem>>(emptyList())}
+    var kind by remember {mutableStateOf("song")};var resultKind by remember {mutableStateOf("song")};var selected by remember {mutableStateOf(AppStore.searchSources())};var sources by remember {mutableStateOf<List<SourceCapability>>(emptyList())};var groups by remember {mutableStateOf<List<PlaylistItem>>(emptyList())}
     var sourceResults by remember {mutableStateOf<Map<String,String>>(emptyMap())}
     var previousGroups by remember {mutableStateOf<List<PlaylistItem>>(emptyList())}
     var sourceDetails by remember {mutableStateOf(false)}
@@ -339,7 +358,7 @@ private fun NativeSearch(service: PlaybackService) {
         if(eligible.isEmpty()) Text("当前类型暂无可用音源")
         FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {eligible.forEach {item->FilterChip(item.id in draftSources,{draftSources=if(item.id in draftSources) draftSources-item.id else draftSources+item.id},label={Text(item.name)},leadingIcon=if(item.id in draftSources) {{Text("✓")}} else null)}}
         TextButton(onClick={draftSources=draftSources+eligible.map {it.id}}){Text("选择全部")}
-    }},confirmButton={TextButton(onClick={selected=draftSources;sourcePicker=false},enabled=eligible.any {it.id in draftSources}){Text("完成")}},dismissButton={TextButton(onClick={sourcePicker=false}){Text("取消")}})
+    }},confirmButton={TextButton(onClick={selected=draftSources;AppStore.setSearchSources(draftSources);sourcePicker=false},enabled=eligible.any {it.id in draftSources}){Text("完成")}},dismissButton={TextButton(onClick={sourcePicker=false}){Text("取消")}})
     if(sourceDetails) AlertDialog(onDismissRequest={sourceDetails=false},title={Text("搜索源状态")},text={Column(Modifier.heightIn(max=musicDialogContentHeight(360.dp)).verticalScroll(rememberScrollState())) {sourceResults.forEach {(id,status)->Text("${sourceName(id)} · $status",fontSize=12.sp,color=if(status.startsWith("搜索失败")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,modifier=Modifier.padding(vertical=6.dp))}}},confirmButton={TextButton(onClick={sourceDetails=false}){Text("关闭")}})
 }
 

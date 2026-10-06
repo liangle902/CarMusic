@@ -55,7 +55,7 @@ fun AccountSettings() {
     Row {
         if(manual||!supportsQr) TextButton(onClick={scope.launch {try {ApiClient.json("/cookies",method="POST",body=JsonObject().apply {addProperty(source,cookie)});cookie="";linked=true;message="账号凭据已保存"} catch(e:CancellationException){throw e} catch(e:Exception){message=e.message?:"保存失败"}}},enabled=cookie.isNotBlank()){Text("保存凭据")}
         if(supportsQr) Button(onClick={generateQr(loginSource)},enabled=!generating){Text(if(generating) "生成中…" else "扫码关联")}
-        TextButton(onClick={scope.launch {try {ApiClient.json("/cookies",method="POST",body=JsonObject().apply {addProperty(source,"")});linked=false;message="已解除关联"} catch(e:CancellationException){throw e} catch(e:Exception){message=e.message?:"解除失败"}}}){Text("解除关联")}
+        if(linked) TextButton(onClick={scope.launch {try {ApiClient.json("/cookies",method="POST",body=JsonObject().apply {addProperty(source,"")});linked=false;message="已解除关联"} catch(e:CancellationException){throw e} catch(e:Exception){message=e.message?:"解除失败"}}}){Text("解除关联")}
     }
     if(supportsQr) TextButton(onClick={manual=!manual}){Text(if(manual) "收起手动关联" else "手动关联（高级）")}
     if(message.isNotBlank()) Text(message)

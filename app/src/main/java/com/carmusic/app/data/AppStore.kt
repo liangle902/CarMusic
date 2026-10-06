@@ -115,6 +115,8 @@ object AppStore {
     val vinyl by lazy { MutableStateFlow(prefs.getBoolean("vinyl", false)) }
     val autoplay by lazy { MutableStateFlow(prefs.getBoolean("autoplay", false)) }
     val notificationControls by lazy {MutableStateFlow(prefs.getBoolean("notificationControls",true))}
+    fun searchSources(): Set<String> = prefs.getStringSet("searchSources", null)?.toSet()?.takeIf { it.isNotEmpty() } ?: setOf("qq","netease","kuwo")
+    fun setSearchSources(value: Set<String>) { val snapshot = value.toSet(); writePreferences {putStringSet("searchSources", snapshot)} }
     val appVisible=MutableStateFlow(false)
     fun setNotificationControls(value:Boolean){notificationControls.value=value;writePreferences {putBoolean("notificationControls",value)}}
 

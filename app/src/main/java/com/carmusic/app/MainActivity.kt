@@ -74,6 +74,13 @@ class MainActivity : ComponentActivity() {
     }
 
 
+    // 前台时系统会先把按键交给 Activity；这里兜底转给播放服务，避免车机方向盘按键被丢弃。
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        val service = playbackService
+        if (service != null && service.handleMediaKey(event)) return true
+        return super.dispatchKeyEvent(event)
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         if (serviceBound) { unbindService(serviceConnection); serviceBound = false }

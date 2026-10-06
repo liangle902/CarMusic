@@ -68,6 +68,7 @@ class PlaybackService : MediaSessionService() {
     private val serviceScope = CoroutineScope(Dispatchers.Main + kotlinx.coroutines.SupervisorJob())
     private var progressJob: Job? = null
     private var resolveJob: Job? = null
+    private var stallJob: Job? = null
     private var notificationLyrics:Job?=null
     private var notificationLyric=""
     private val failedTracks = mutableSetOf<String>()
@@ -201,6 +202,15 @@ class PlaybackService : MediaSessionService() {
             }
 
             override fun onPlaybackStateChanged(state: Int) {
+                // 缓冲超过 25 秒仍无数据视为音源卡死，走换源/跳过流程，避免队列停在这首歌。
+                stallJob?.cancel()
+                if (state == Player.STATE_BUFFERING) {
+                    val key = currentSong.value?.key
+                    stallJob = serviceScope.launch {
+                        delay(25000)
+                        if (currentSong.value?.key == key && player.playbackState == Player.STATE_BUFFERING) handleFailure("音源加载超时")
+                    }
+                }
                 if (state == Player.STATE_READY) {
                     duration.value = player.duration.coerceAtLeast(0L)
                     currentSong.value?.let {original->resolvedSong.value?.let {resolved->AppStore.saveResolved(original,resolved)};AppStore.markPlayback(original,"可播放")}
@@ -280,23 +290,7 @@ class PlaybackService : MediaSessionService() {
             ): Boolean {
                 @Suppress("DEPRECATION")
                 val event = intent.getParcelableExtra<KeyEvent>(Intent.EXTRA_KEY_EVENT)
-                if (event != null && event.action == KeyEvent.ACTION_DOWN) {
-                    when (event.keyCode) {
-                        KeyEvent.KEYCODE_MEDIA_NEXT -> {
-                            playNext()
-                            return true
-                        }
-                        KeyEvent.KEYCODE_MEDIA_PREVIOUS -> {
-                            playPrevious()
-                            return true
-                        }
-                        KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
-                        KeyEvent.KEYCODE_HEADSETHOOK -> {
-                            togglePlayPause()
-                            return true
-                        }
-                    }
-                }
+                if (event != null && handleMediaKey(event)) return true
                 return super.onMediaButtonEvent(session, controllerInfo, intent)
             }
         }
@@ -347,6 +341,7 @@ class PlaybackService : MediaSessionService() {
     }
     private fun loadSong(song: SongItem, resume: Long = 0L, alternative: SongItem? = null) {
         resolveJob?.cancel()
+        stallJob?.cancel()
         resolveJob = serviceScope.launch {
             player.pause()
             player.clearMediaItems()
@@ -377,7 +372,7 @@ class PlaybackService : MediaSessionService() {
                 ?: resolved.id.takeIf { resolved.source == "local" && (it.startsWith("content:") || it.startsWith("file:")) }
                 ?: if(alternative==null) ApiClient.offlineUri(song) else null
             val cachedUrl=ApiClient.streamUrl(resolved).takeIf {url -> simpleCache?.let {cache -> val key=ApiClient.playbackCacheKey(Uri.parse(url));val length=ContentMetadata.getContentLength(cache.getContentMetadata(key));length>0 && cache.isCached(key,0,length)} == true}
-            val info = try { if (direct == null && cachedUrl == null) ApiClient.inspectStream(resolved) else null }
+            val info = try { if (direct == null && cachedUrl == null) (kotlinx.coroutines.withTimeoutOrNull(30000) { ApiClient.inspectStream(resolved) } ?: throw java.io.IOException("音源检测超时")) else null }
                 catch (e: CancellationException) { throw e }
                 catch (e: Exception) { handleFailure(e.message ?: "音源解析失败"); return@launch }
             ensureActive()
@@ -405,8 +400,8 @@ class PlaybackService : MediaSessionService() {
             switchedTracks.add(song.key)
             resolveJob?.cancel()
             resolveJob=serviceScope.launch {
-                try {val alternative=ApiClient.switchSource(resolvedSong.value?:song);ensureActive();loadSong(song,currentPosition.value,alternative)}
-                catch(e:CancellationException){throw e} catch(_:Exception){advanceAfterFailure(message)}
+                try {val alternative=kotlinx.coroutines.withTimeout(30000) {ApiClient.switchSource(resolvedSong.value?:song)};ensureActive();loadSong(song,currentPosition.value,alternative)}
+                catch(e:kotlinx.coroutines.TimeoutCancellationException){advanceAfterFailure("换源超时：$message")} catch(e:CancellationException){throw e} catch(_:Exception){advanceAfterFailure(message)}
             }
         } else advanceAfterFailure(message)
     }
@@ -462,6 +457,21 @@ class PlaybackService : MediaSessionService() {
         playlist.value = emptyList(); currentSong.value = null;resolvedSong.value=null; currentPosition.value = 0; duration.value = 0; isPlaying.value = false
         persistSession()
     }
+
+    /** 方向盘/耳机媒体键统一入口；返回是否已处理。仅响应首次按下，避免长按重复触发。 */
+    fun handleMediaKey(event: KeyEvent): Boolean {
+        val handled = when (event.keyCode) {
+            KeyEvent.KEYCODE_MEDIA_NEXT, KeyEvent.KEYCODE_MEDIA_SKIP_FORWARD -> { if (event.isFirstDown()) playNext(); true }
+            KeyEvent.KEYCODE_MEDIA_PREVIOUS, KeyEvent.KEYCODE_MEDIA_SKIP_BACKWARD -> { if (event.isFirstDown()) playPrevious(); true }
+            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_HEADSETHOOK -> { if (event.isFirstDown()) togglePlayPause(); true }
+            KeyEvent.KEYCODE_MEDIA_PLAY -> { if (event.isFirstDown() && !player.isPlaying) togglePlayPause(); true }
+            KeyEvent.KEYCODE_MEDIA_PAUSE, KeyEvent.KEYCODE_MEDIA_STOP -> { if (event.isFirstDown() && player.isPlaying) togglePlayPause(); true }
+            else -> false
+        }
+        if (handled) Log.i("PlaybackService", "media key ${KeyEvent.keyCodeToString(event.keyCode)} action=${event.action}")
+        return handled
+    }
+    private fun KeyEvent.isFirstDown() = action == KeyEvent.ACTION_DOWN && repeatCount == 0
 
     fun togglePlayPause() {
         if (player.currentMediaItem == null) {
