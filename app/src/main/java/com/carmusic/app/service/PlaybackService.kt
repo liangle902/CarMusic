@@ -120,8 +120,11 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    private val speechDucker by lazy { SpeechDucker(this) { if (::player.isInitialized) player.volume = it } }
+
     override fun onCreate() {
         super.onCreate()
+        speechDucker.start()
         oneOsKeys.start()
         setMediaNotificationProvider(object:DefaultMediaNotificationProvider(this) {
             override fun getNotificationContentText(metadata:MediaMetadata):CharSequence = notificationLyric.takeIf {it.isNotBlank()}?:metadata.artist?:"星河音乐"
@@ -564,6 +567,7 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         oneOsKeys.stop()
+        speechDucker.stop()
         persistSession()
         serviceScope.cancel()
         mediaSession?.run {
