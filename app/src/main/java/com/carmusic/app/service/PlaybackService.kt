@@ -320,8 +320,9 @@ class PlaybackService : MediaSessionService() {
         }
 
         mediaSession = MediaSession.Builder(this, forwardingPlayer)
-            .setBitmapLoader(DataSourceBitmapLoader(DataSourceBitmapLoader.DEFAULT_EXECUTOR_SERVICE.get(),
-                DefaultDataSource.Factory(this, OkHttpDataSource.Factory(ApiClient.httpClient))))
+            // 套一层缓存：通知每次随歌词刷新时复用已加载的封面，否则封面会反复闪回默认图标。
+            .setBitmapLoader(androidx.media3.session.CacheBitmapLoader(DataSourceBitmapLoader(DataSourceBitmapLoader.DEFAULT_EXECUTOR_SERVICE.get(),
+                DefaultDataSource.Factory(this, OkHttpDataSource.Factory(ApiClient.httpClient)))))
             .setSessionActivity(sessionActivityPendingIntent)
             .setCallback(sessionCallback)
             .build()
