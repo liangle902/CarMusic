@@ -152,7 +152,7 @@ private fun BitratePicker(song: SongItem, resolved: SongItem?, service: Playback
             if (!loading && options.isEmpty()) Text("没有找到其他可用的码率")
             val currentKey = (resolved ?: song).key
             // 码率相同的版本对用户没有区别，只保留一个（优先保留正在播放的）。
-            val shown = options.sortedByDescending { it.song.key == currentKey }.distinctBy { it.bitrate }.sortedByDescending { it.bitrate }
+            val shown = options.filter { it.exact || it.song.key == currentKey }.sortedByDescending { it.song.key == currentKey }.distinctBy { it.bitrate }.sortedByDescending { it.bitrate }
             LazyColumn(Modifier.heightIn(max = musicDialogContentHeight(350.dp))) {
                 items(shown, key = { it.song.key }) { option ->
                     val current = option.song.key == currentKey

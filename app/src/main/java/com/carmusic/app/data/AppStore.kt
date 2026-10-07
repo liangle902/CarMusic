@@ -70,6 +70,9 @@ object AppStore {
         else {writePreferences {remove("resolved_${original.key}")};resolvedSources.update {it-original.key}}
     }
     fun restoredResolved(song:SongItem):SongItem?=resolvedSources.value[song.key]
+    // 用户手动选定的版本不再被自动升级覆盖；自动记住的版本只作为下次的起播版本。
+    fun isManualSource(song:SongItem):Boolean=prefs.getBoolean("manual_${song.key}",false)
+    fun setManualSource(song:SongItem,manual:Boolean){writePreferences {if(manual) putBoolean("manual_${song.key}",true) else remove("manual_${song.key}")}}
     private val prefs by lazy { com.carmusic.app.CarMusicApplication.instance.getSharedPreferences("carmusic", Context.MODE_PRIVATE) }
     val favorites by lazy { MutableStateFlow(readSongs("favorites")) }
     val imports by lazy { MutableStateFlow(readSongs("imports")) }
